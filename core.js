@@ -34,10 +34,13 @@ export function makeManager(board) {
     return next;
   }
 
-  async function withMutation(action) {
+  async function withMutation(action, pauseAfterMs=0) {
+    // Keep an existing post-reset cooldown when another action starts before
+    // it expires (for example Reset immediately followed by Grid).
+    const previousPause=(await getConfig()).pauseUntil;
     await putConfig({pauseUntil: Date.now() + 10 * 60_000});
     try { return await action(); }
-    finally { await putConfig({pauseUntil: 0}); }
+    finally { await putConfig({pauseUntil: Math.max(previousPause, pauseAfterMs ? Date.now()+pauseAfterMs : 0)}); }
   }
 
   async function readCard(image) {
@@ -47,6 +50,11 @@ export function makeManager(board) {
 
   async function readAward(image) {
     try { return await image.getMetadata(AWARD_KEY); }
+    catch (_) { return undefined; }
+  }
+
+  async function readCircle(shape) {
+    try { return await shape.getMetadata(CIRCLE_KEY); }
     catch (_) { return undefined; }
   }
 
@@ -149,6 +157,51 @@ export function makeManager(board) {
       try { found.push(await board.getById(id)); } catch (_) { /* removed manually */ }
     }
     return uniqueById(found);
+  }
+
+  async function groupMembers(image) {
+    if(!image.groupId) return [image];
+    const group=await board.getById(image.groupId);
+    return group?.type==='group' ? group.getItems() : [image];
+  }
+
+  function expectedMemberIds(image,meta) {
+    return new Set([image.id,...(meta?.badgeIds||[]),...(meta?.awards||[]).map(a=>a.itemId)]);
+  }
+
+  async function safeManagedMembers(image,meta) {
+    const members=await groupMembers(image);
+    const allowed=expectedMemberIds(image,meta);
+    if(members.some(item=>!allowed.has(item.id))) {
+      throw new Error('Die Kartengruppe enthält fremde Elemente. Bitte vor dieser Aktion separat gruppieren.');
+    }
+    return members;
+  }
+
+  function requiresFrameDetach(item) {
+    return item?.parentId && item.parentId!=='null';
+  }
+
+  async function requireCanvasItems(items, operation) {
+    if(items.some(requiresFrameDetach)) {
+      throw new Error(`${operation}: Diese Karte ist mit einem Frame verbunden. Bitte zuerst auf eine Rechteck-Levelzone verschieben.`);
+    }
+  }
+
+  async function moveCanvasItem(item, position) {
+    let live=await board.getById(item.id);
+    if(requiresFrameDetach(live)) {
+      const parent=await board.getById(live.parentId);
+      if(parent?.type!=='frame' || !parent.remove) {
+        throw new Error('Das Element ist Kind eines nicht unterstützten Containers.');
+      }
+      await parent.remove(live);
+      live=await board.getById(live.id);
+      if(requiresFrameDetach(live))throw new Error('Das Element konnte nicht vom Frame gelöst werden.');
+    }
+    live.x=position.x;live.y=position.y;
+    await live.sync();
+    return live;
   }
 
   async function releaseCardGroup(image) {
@@ -289,8 +342,271 @@ export function makeManager(board) {
   }
 
   async function repairSelected(progress=()=>{}) {
-    const cfg=await getConfig();
-    return initializeSelected(cfg.levelCount,progress,true);
+    return checkAndRepairSelected(progress);
+  }
+
+  async function resetSelected(count,progress=()=>{}) {
+    const cards=await selectedCards({allowNew:false});
+    if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
+    count=clamp(Number(count)||6,2,10);
+    // Preflight every card before changing any board object.
+    for(const {image,meta} of cards) {
+      const members=await safeManagedMembers(image,meta);
+      await requireCanvasItems(members,'Reset');
+    }
+    return withMutation(async()=>{
+      await putConfig({levelCount:count});
+      const groupIds=[];
+      let reset=0;
+      for(const {image,meta} of cards) {
+        const anchor=await absolutePosition(image);
+        const badgeIds=await createCircles(image,count,0,anchor);
+        let committed=false;
+        try {
+          const group=await withReleasedCard(image,async()=>{
+            const current=await board.getById(image.id);
+            const newBadges=await getItemsByIds(badgeIds);
+            const created=await regroup([current,...newBadges]);
+            await current.setMetadata(CARD_KEY,{version:1,level:0,count,badgeIds,awards:[]});
+            committed=true;
+            return created;
+          });
+          if(group)groupIds.push(group.id);
+          // Remove only elements created by this app for this avatar.
+          for(const old of await getItemsByIds([...(meta.badgeIds||[]),...(meta.awards||[]).map(a=>a.itemId)])) {
+            if(old.id===image.id)continue;
+            const ownCircle=old.type==='shape' && (await readCircle(old))?.cardId===image.id;
+            const ownAward=old.type==='image' && (await readAward(old))?.cardId===image.id;
+            if(ownCircle || ownAward) {
+              try {await board.remove(old);}catch(err){console.warn('Could not remove stale reset item',old.id,err);}
+            }
+          }
+          reset++;
+        } catch(error) {
+          if(!committed) {
+            for(const item of await getItemsByIds(badgeIds)) {
+              if(!item.groupId)try{await board.remove(item);}catch(err){console.warn('Reset cleanup failed',err);}
+            }
+          }
+          throw error;
+        }
+        progress(reset,cards.length);
+      }
+      await restoreCardSelection(groupIds);
+      return {reset,total:cards.length,count};
+    },2*60_000);
+  }
+
+  async function arrangeSelectedGrid(columns=4,progress=()=>{}) {
+    const cards=await selectedCards({allowNew:false});
+    if(cards.length<2)throw new Error('Bitte mindestens zwei vorbereitete Karten auswählen.');
+    columns=clamp(Math.round(Number(columns)||4),2,8);
+    const snapshots=[];
+    for(const {image,meta} of cards) {
+      const members=await safeManagedMembers(image,meta);
+      const expected=expectedMemberIds(image,meta);
+      if(expected.size!==members.length || members.some(item=>!expected.has(item.id))) {
+        throw new Error('Eine Kartengruppe ist unvollständig. Bitte zuerst Repair ausführen.');
+      }
+      await requireCanvasItems(members,'Grid');
+      const anchor=await absolutePosition(image);
+      const positions=new Map();
+      for(const item of members)positions.set(item.id,await absolutePosition(item));
+      snapshots.push({image,meta,members,anchor,positions});
+    }
+    // First cluster approximately horizontal rows, then sort left to right.
+    const maxW=Math.max(...snapshots.map(c=>Number(c.image.width)));
+    const maxH=Math.max(...snapshots.map(c=>Number(c.image.height)));
+    const rowBands=[];
+    for(const card of [...snapshots].sort((a,b)=>a.anchor.y-b.anchor.y)) {
+      const band=rowBands.find(row=>Math.abs(row.y-card.anchor.y)<=maxH*.35);
+      if(band){band.cards.push(card);band.y=(band.y*(band.cards.length-1)+card.anchor.y)/band.cards.length;}
+      else rowBands.push({y:card.anchor.y,cards:[card]});
+    }
+    const ordered=rowBands.flatMap(band=>band.cards.sort((a,b)=>a.anchor.x-b.anchor.x));
+    const startX=Math.min(...snapshots.map(c=>c.anchor.x));
+    const startY=Math.min(...snapshots.map(c=>c.anchor.y));
+    const stepX=maxW*1.18,stepY=maxH*1.12;
+    return withMutation(async()=>{
+      const groupIds=[];
+      let moved=0;
+      for(let i=0;i<ordered.length;i++) {
+        const card=ordered[i];
+        const target={x:startX+(i%columns)*stepX,y:startY+Math.floor(i/columns)*stepY};
+        const dx=target.x-card.anchor.x,dy=target.y-card.anchor.y;
+        if(Math.abs(dx)<.01 && Math.abs(dy)<.01) {
+          if(card.image.groupId)groupIds.push(card.image.groupId);
+          progress(i+1,ordered.length);
+          continue;
+        }
+        const group=await withReleasedCard(card.image,async()=>{
+          try {
+            for(const [id,origin] of card.positions) {
+              await moveCanvasItem({id},{x:origin.x+dx,y:origin.y+dy});
+            }
+            const movedMembers=await getItemsByIds([...card.positions.keys()]);
+            return regroup(movedMembers);
+          } catch(error) {
+            // Restore board coordinates before withReleasedCard regroups members.
+            for(const [id,origin] of card.positions) {
+              try{await moveCanvasItem({id},origin);}catch(restoreErr){console.error('Grid position rollback failed',id,restoreErr);}
+            }
+            throw error;
+          }
+        });
+        if(group)groupIds.push(group.id);
+        moved++;
+        progress(i+1,ordered.length);
+      }
+      await restoreCardSelection(groupIds);
+      return {moved,total:ordered.length,columns};
+    });
+  }
+
+  async function layersSelected(progress=()=>{}) {
+    if(!board.bringToFront)throw new Error('Diese Miro-Version unterstützt die Ebenen-Funktion nicht.');
+    const cards=await selectedCards({allowNew:false});
+    if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
+    let updated=0;
+    for(const {image,meta} of cards) {
+      const members=await safeManagedMembers(image,meta);
+      const index=new Map(members.map(item=>[item.id,item]));
+      // Each avatar is one contiguous visual stack: background first, then
+      // circles, then award icons. No changes to coordinates or grouping.
+      await board.bringToFront(index.get(image.id)||image);
+      const circles=(meta.badgeIds||[]).map(id=>index.get(id)).filter(Boolean);
+      if(circles.length)await board.bringToFront(circles);
+      const awards=(meta.awards||[]).map(a=>index.get(a.itemId)).filter(Boolean);
+      if(awards.length)await board.bringToFront(awards);
+      updated++;
+      progress(updated,cards.length);
+    }
+    return {updated,total:cards.length};
+  }
+
+  async function auditCard(image,meta) {
+    const issues=[];
+    const expected=expectedMemberIds(image,meta);
+    const members=await groupMembers(image);
+    const grouped=new Set(members.map(item=>item.id));
+    if(!image.groupId || members.some(item=>!expected.has(item.id)))issues.push('Gruppe');
+    const anchor=await absolutePosition(image);
+    const count=clamp(Number(meta.count)||6,2,10);
+    if(!Array.isArray(meta.badgeIds) || meta.badgeIds.length!==count)issues.push('Kreisanzahl');
+    const slots=await circleLayout(image,count,anchor);
+    const badges=await getItemsByIds(meta.badgeIds||[]);
+    for(let i=0;i<count;i++) {
+      const badge=badges.find(item=>item.id===meta.badgeIds?.[i]);
+      if(!badge || badge.type!=='shape' || !grouped.has(badge.id)) {issues.push('Kreise');continue;}
+      const tag=await readCircle(badge);
+      if(tag?.cardId!==image.id || tag?.index!==i+1)issues.push('Kreis-Metadaten');
+      const pos=await absolutePosition(badge);
+      if(Math.abs(pos.x-slots[i].x)>1 || Math.abs(pos.y-slots[i].y)>1)issues.push('Kreispositionen');
+      const style=levelStyle(i+1,meta.level,badge.width);
+      if(badge.style?.fillColor!==style.fillColor || badge.style?.color!==style.color)issues.push('Kreisfarben');
+    }
+    const awards=Array.isArray(meta.awards)?meta.awards:[];
+    for(let i=0;i<awards.length;i++) {
+      const icon=(await getItemsByIds([awards[i].itemId]))[0];
+      if(!icon || icon.type!=='image' || !grouped.has(icon.id)){issues.push('Awards');continue;}
+      const tag=await readAward(icon);
+      if(tag?.cardId!==image.id || tag?.id!==awards[i].id)issues.push('Award-Metadaten');
+      const pos=await absolutePosition(icon);
+      const expectedPos=await awardPosition(image,i,anchor);
+      if(Math.abs(pos.x-expectedPos.x)>1 || Math.abs(pos.y-expectedPos.y)>1)issues.push('Award-Positionen');
+    }
+    return {healthy:issues.length===0,issues:[...new Set(issues)],anchor,count};
+  }
+
+  async function checkAndRepairSelected(progress=()=>{}) {
+    const cards=await selectedCards({allowNew:false});
+    if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
+    return withMutation(async()=>{
+      let updated=0,healthy=0,awardsRepaired=0;
+      const groupIds=[];
+      for(let i=0;i<cards.length;i++) {
+        const image=await board.getById(cards[i].image.id);
+        const meta=await readCard(image);
+        if(!meta)throw new Error('Kartenmetadaten fehlen. Bitte zuerst die Karte vorbereiten.');
+        await safeManagedMembers(image,meta);
+        const audit=await auditCard(image,meta);
+        if(audit.healthy) {
+          healthy++;
+          if(image.groupId)groupIds.push(image.groupId);
+          progress(i+1,cards.length);
+          continue;
+        }
+        const originalGroupId=image.groupId;
+        const existingAwards=[];
+        for(const aw of meta.awards||[]) {
+          const icon=(await getItemsByIds([aw.itemId]))[0];
+          if(icon?.groupId && icon.groupId!==originalGroupId) {
+            throw new Error('Ein Award ist in einer anderen Gruppe. Bitte diese Gruppierung erst lösen.');
+          }
+          existingAwards.push(icon);
+        }
+        const badgeIds=await createCircles(image,audit.count,clamp(Number(meta.level)||0,0,audit.count),audit.anchor);
+        const createdAwards=[],awardOrigins=[];
+        let committed=false;
+        try {
+          const group=await withReleasedCard(image,async()=>{
+            const current=await board.getById(image.id);
+            const awards=[];
+            try {
+              for(let j=0;j<(meta.awards||[]).length;j++) {
+                const previous=meta.awards[j];
+                const definition=AWARDS.find(a=>a.id===previous.id);
+                if(!definition)throw new Error('Unbekannter Award: '+previous.id);
+                const target=await awardPosition(current,j,audit.anchor);
+                let icon=existingAwards[j];
+                if(icon) {
+                  const origin=await absolutePosition(icon);
+                  if(Math.abs(origin.x-target.x)>1 || Math.abs(origin.y-target.y)>1) {
+                    awardOrigins.push({id:icon.id,pos:origin});
+                    icon=await moveCanvasItem(icon,target);
+                    awardsRepaired++;
+                  }
+                } else {
+                  icon=await board.createImage({title:`Award: ${definition.name}`,url:awardAssetUrl(definition),x:target.x,y:target.y,width:target.size});
+                  createdAwards.push(icon);
+                  awardsRepaired++;
+                }
+                await icon.setMetadata(AWARD_KEY,{cardId:current.id,id:previous.id});
+                awards.push({id:previous.id,itemId:icon.id});
+              }
+              const allIcons=await getItemsByIds(awards.map(a=>a.itemId));
+              const group=await regroup([current,...await getItemsByIds(badgeIds),...allIcons]);
+              await current.setMetadata(CARD_KEY,{version:1,count:audit.count,level:clamp(Number(meta.level)||0,0,audit.count),badgeIds,awards});
+              committed=true;
+              return group;
+            } catch(error) {
+              for(const old of awardOrigins) {
+                try{await moveCanvasItem({id:old.id},old.pos);}catch(restoreErr){console.error('Award rollback failed',old.id,restoreErr);}
+              }
+              throw error;
+            }
+          });
+          if(group)groupIds.push(group.id);
+          // Only delete circles with the correct original card ownership.
+          for(const old of await getItemsByIds(meta.badgeIds||[])) {
+            if(old.type==='shape' && (await readCircle(old))?.cardId===image.id) {
+              try{await board.remove(old);}catch(err){console.warn('Old circle cleanup failed',err);}
+            }
+          }
+          updated++;
+        } catch(error) {
+          if(!committed) {
+            for(const item of await getItemsByIds([...badgeIds,...createdAwards.map(a=>a.id)])) {
+              if(!item.groupId)try{await board.remove(item);}catch(err){console.warn('Repair cleanup failed',err);}
+            }
+          }
+          throw error;
+        }
+        progress(i+1,cards.length);
+      }
+      await restoreCardSelection(groupIds);
+      return {updated,healthy,total:cards.length,awardsRepaired};
+    });
   }
 
   async function setLevel(image, requested) {
@@ -536,6 +852,7 @@ export function makeManager(board) {
 
   return {
     getConfig,putConfig,selectionInfo,selectedCards,allCards,initializeSelected,repairSelected,
+    resetSelected,arrangeSelectedGrid,layersSelected,checkAndRepairSelected,
     setSelectedLevel,assignSelectedZone,unassignSelectedZone,syncLevels,changeAward,rearrangeSelectedAwards,
   };
 }

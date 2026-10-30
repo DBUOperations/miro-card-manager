@@ -133,9 +133,27 @@ $('initialize').addEventListener('click',()=>run('Karten vorbereiten',async(prog
   toast(`${res.updated} Karten vorbereitet · ${res.unchanged} bereits fertig.`);
 }));
 
-$('repair-positions').addEventListener('click',()=>run('Kreis-Positionen korrigieren',async(progress)=>{
-  const res=await manager.repairSelected(progress);
-  toast(`${res.updated} Karten an ihren aktuellen Positionen korrigiert.`);
+$('reset-cards').addEventListener('click',()=>run('Full Reset',async(progress)=>{
+  const cards=await manager.selectedCards({allowNew:false});
+  if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
+  if(!window.confirm(`${cards.length} Karte(n) zurücksetzen? Alle Awards werden gelöscht, Level wird 0 und die Karte erhält ${levelCount} graue Kreise. Die Avatarbilder bleiben erhalten.`))return;
+  const res=await manager.resetSelected(levelCount,progress);
+  toast(`${res.reset} Karten zurückgesetzt · Level 0 · ${res.count} graue Kreise. Auto Level pausiert zwei Minuten.`);
+}));
+
+$('grid-cards').addEventListener('click',()=>run('Grid anordnen',async(progress)=>{
+  const res=await manager.arrangeSelectedGrid(4,progress);
+  toast(`${res.total} Karten in einem Raster mit ${res.columns} Spalten angeordnet.`);
+}));
+
+$('check-repair').addEventListener('click',()=>run('Karten prüfen & reparieren',async(progress)=>{
+  const res=await manager.checkAndRepairSelected(progress);
+  toast(`${res.total} geprüft · ${res.updated} repariert · ${res.healthy} bereits in Ordnung · ${res.awardsRepaired} Awards korrigiert.`);
+}));
+
+$('fix-layers').addEventListener('click',()=>run('Karten-Ebenen korrigieren',async(progress)=>{
+  const res=await manager.layersSelected(progress);
+  toast(`${res.updated} Karte(n) inklusive Kreise und Awards nach vorne geholt.`);
 }));
 
 $('assign-zone').addEventListener('click',()=>run('Feld verbinden',async()=>{

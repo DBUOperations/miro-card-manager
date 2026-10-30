@@ -13,6 +13,12 @@
       <h1>CARD <span>MANAGER</span></h1>
       <p>Level &amp; Awards direkt auf Deinem Miro-Board.</p>
       <div class="selection" id="selection"><b id="selected-count">0</b> Karten ausgewählt <span id="zone-count">· 0 Felder</span></div>
+      <div class="quick-tools" aria-label="Kartenwerkzeuge">
+        <button id="reset-cards" class="tool-button" title="Ausgewählte Karten: alle Awards entfernen, Level 0 und aktuelle Kreisanzahl">↺ Reset</button>
+        <button id="grid-cards" class="tool-button" title="Ausgewählte Karten als Raster mit vier Spalten anordnen">▦ Grid</button>
+        <button id="check-repair" class="tool-button" title="Ausgewählte Karten prüfen und nur bei Bedarf reparieren">✚ Repair</button>
+        <button id="fix-layers" class="tool-button" title="Ausgewählte Karten als ganze Einheit in den Vordergrund holen">⇧ Layers</button>
+      </div>
     </header>
 
     <section class="section">
@@ -22,7 +28,6 @@
       <div class="circles" id="level-preview" aria-label="Level-Vorschau"></div>
       <p class="hint">Wähle die Avatar-Karten auf dem Board aus. Bereits vorbereitete Karten werden nicht doppelt angelegt.</p>
       <button id="initialize" class="button primary">Level-Zahlen hinzufügen</button>
-      <button id="repair-positions" class="button ghost" style="width:100%;margin-top:10px">↻ Kreis-Positionen korrigieren</button>
     </section>
 
     <section class="section">
@@ -58,7 +63,7 @@
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.4</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.5</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
