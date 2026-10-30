@@ -133,6 +133,11 @@ $('initialize').addEventListener('click',()=>run('Karten vorbereiten',async(prog
   toast(`${res.updated} Karten vorbereitet · ${res.unchanged} bereits fertig.`);
 }));
 
+$('repair-positions').addEventListener('click',()=>run('Kreis-Positionen korrigieren',async(progress)=>{
+  const res=await manager.repairSelected(progress);
+  toast(`${res.updated} Karten an ihren aktuellen Positionen korrigiert.`);
+}));
+
 $('assign-zone').addEventListener('click',()=>run('Feld verbinden',async()=>{
   const zone=await manager.assignSelectedZone($('zone-level').value);
   toast(`Feld mit Level ${zone.level} verbunden.`);
@@ -151,6 +156,11 @@ $('set-level').addEventListener('click',()=>run('Level setzen',async(progress)=>
 $('sync-levels').addEventListener('click',()=>run('Level abgleichen',async(progress)=>{
   const res=await manager.syncLevels(progress);
   toast(`${res.updated} von ${res.total} Karten aktualisiert · ${res.zones} Level-Felder erkannt.`);
+}));
+
+$('rearrange-awards').addEventListener('click',()=>run('Awards anordnen',async(progress)=>{
+  const res=await manager.rearrangeSelectedAwards(progress);
+  toast(`${res.updated} von ${res.total} Karten vertikal angeordnet.`);
 }));
 
 $('auto-level').addEventListener('change',async(e)=>{
