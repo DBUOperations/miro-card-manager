@@ -1,4 +1,6 @@
-# Caboledo / DBU – Miro Card Manager (Testversion 1.3)
+# Caboledo / DBU – Miro Card Manager (Testversion 1.4)
+
+**Hotfix 1.4:** Beim Hinzufügen oder Entfernen eines Awards sowie bei einer Änderung der Level-Kreisanzahl werden bereits vorhandene Award-Bilder nicht mehr synchronisiert oder verschoben. Das verhindert einen Miro-SDK-Fehler, der auch in v1.3 auftreten konnte, wenn eine Award-Grafik Kind eines Frames ist. Nur die explizite Funktion zur Award-Neuanordnung ändert Award-Koordinaten und löst zuvor bestehende Frame-Kindbeziehungen. Die Reparaturfunktion sammelt nach einer fehlgeschlagenen Gruppierung verwaiste Awards wieder ein und fügt sie zusammen mit den korrigierten Kreisen erneut zur Kartengruppe hinzu. Nach dem Entfernen eines mittleren Awards kann bis zu einer expliziten Neuanordnung eine Lücke sichtbar bleiben. Durch 15 Mock-Tests geprüft; die echte Miro-Umgebung muss separat überprüft werden.
 
 **Hotfix 1.3:** Awards, die durch ein Miro-Frame als Kinder geführt werden, werden beim Neuordnen korrekt in Frame-Koordinaten bewegt. Wenn eine Karte in ein anderes Level-Frame verschoben wurde, wird das Award zuerst vom alten Frame gelöst, damit es an die neue Position verschoben werden darf. Bei einem SDK-Fehler wird die Kartengruppe soweit möglich automatisch wiederhergestellt. Neu erzeugte Icons und Kreise werden bei einem Fehler bereinigt. Das Verhalten wurde mit Mock-Tests, nicht auf einem echten Miro-Board, geprüft.
 

@@ -240,7 +240,22 @@ export function makeManager(board) {
           // Create replacements first so an SDK failure does not destroy the old circles.
           const badges = await createCircles(currentImage,cardCount,level,anchor);
           try {
-            if (meta?.awards?.length) await reflowAwardPositions(currentImage,meta.awards,anchor);
+            if(repair && meta?.awards?.length) {
+              // Recover awards orphaned by a previously interrupted ungroup.
+              // Normal level-count changes leave existing awards untouched.
+              const present=new Set(members.map(item=>item.id));
+              const orphaned=(await getItemsByIds(meta.awards.map(a=>a.itemId)))
+                .filter(item=>item.type==='image' && !present.has(item.id));
+              if(orphaned.some(item=>item.groupId)) {
+                throw new Error('Ein Award ist in einer anderen Gruppe. Bitte diese Gruppierung erst lösen.');
+              }
+              if(orphaned.length) {
+                await reflowAwardPositions(currentImage,meta.awards,anchor);
+                members=[...members,...orphaned];
+              }
+            }
+            // Existing awards already move with their Miro group. Never
+            // reposition these frame children just to change circle count.
             if (meta?.badgeIds) {
               const stale = new Set(meta.badgeIds);
               for (const badge of await getItemsByIds([...stale])) await board.remove(badge);
@@ -416,19 +431,9 @@ export function makeManager(board) {
         if (parent?.type !== 'frame') {
           throw new Error('Award je dete nepodržanog elementa. Pomeri ga iz kontejnera pre uređivanja.');
         }
-        const left=parent.x-parent.width/2, top=parent.y-parent.height/2;
-        const localX=pos.x-left, localY=pos.y-top;
-        const halfW=Number(icon.width)/2 || 0,halfH=Number(icon.height)/2 || halfW;
-        const fits=localX-halfW>=0 && localX+halfW<=parent.width &&
-          localY-halfH>=0 && localY+halfH<=parent.height;
-        if (icon.relativeTo==='parent_top_left' && fits) {
-          // Keep award inside its frame, using the parent's local coordinates.
-          icon.x=localX; icon.y=localY;
-          await icon.sync();
-          continue;
-        }
-        // The card was moved to another level frame. Miro rejects moves of
-        // child images outside their old frame; detach BEFORE moving them.
+        // Miro can reject an image sync even if the requested position is
+        // expressed in frame-local coordinates. Detach unconditionally BEFORE
+        // changing x/y. This runs only via the explicit realign action.
         await parent.remove(icon);
         icon=await board.getById(icon.id);
         if (icon.parentId && icon.parentId !== 'null') {
@@ -463,7 +468,9 @@ export function makeManager(board) {
           awards.push({id:slug,itemId:icon.id});
           members.push(icon);
         }
-        await reflowAwardPositions(currentImage,awards,anchor);
+        // Adding/removing awards must not move existing awards. Miro sometimes
+        // keeps their old Frame ownership after dragging a group between zones.
+        // Moving them here caused the entire card to be left ungrouped.
         if(remove) {
           for(const img of await getItemsByIds([existing.itemId])) await board.remove(img);
           members=members.filter(x=>x.id!==existing.itemId);
