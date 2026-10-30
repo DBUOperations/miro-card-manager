@@ -22,6 +22,12 @@ if(board?.ui) {
     },1500);
   }
   board.ui.on('experimental:items:update',schedule);
+  // Miro's experimental item-update event isn't guaranteed on every drag.
+  // Selection changes offer another chance to detect a completed move.
+  board.ui.on('selection:update',schedule);
+  // Event-independent safety net; syncLevels itself skips work if Auto Level
+  // is disabled or the panel is currently editing board items.
+  setInterval(schedule,15000);
   // Also synchronize on board load to catch movements missed between sessions.
   setTimeout(schedule,3000);
 }

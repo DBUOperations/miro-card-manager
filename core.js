@@ -99,11 +99,11 @@ export function makeManager(board) {
     };
   }
 
-  async function circleLayout(image, n) {
+  async function circleLayout(image, n, anchor) {
     const w = image.width, h = image.height;
     const gap = w * 0.023;
     const d = Math.min(w * 0.105, (w * 0.86 - (n - 1) * gap) / n);
-    const position = await absolutePosition(image);
+    const position = anchor || await absolutePosition(image);
     const start = position.x - (n * d + (n - 1) * gap) / 2 + d / 2;
     const y = position.y + h * (277 / 295 - .5);
     return Array.from({length:n}, (_,i)=>({x:start+i*(d+gap),y,diameter:d,index:i+1}));
@@ -122,9 +122,9 @@ export function makeManager(board) {
     };
   }
 
-  async function createCircles(image, count, level) {
+  async function createCircles(image, count, level, anchor) {
     const ids = [];
-    for (const slot of await circleLayout(image, count)) {
+    for (const slot of await circleLayout(image, count, anchor)) {
       const badge = await board.createShape({
         content: `<p>${slot.index}</p>`, shape:'circle',
         x:slot.x, y:slot.y, width:slot.diameter, height:slot.diameter,
@@ -194,6 +194,10 @@ export function makeManager(board) {
         const {image, meta:originalMeta} = cards[i];
         progress(i, cards.length);
         const meta = await readCard(image) || originalMeta;
+        // The position used by Auto Level (while grouped) is authoritative.
+        // Ungrouping may change how Miro exposes child coordinates, so retain
+        // the board-space anchor BEFORE releasing the card group.
+        const anchor = await absolutePosition(image);
         const cardCount = repair ? clamp(Number(meta?.count)||count,2,10) : count;
         if (!meta && image.groupId) {
           throw new Error('Eine neue Avatar-Karte ist bereits gruppiert. Bitte zuerst Gruppierung aufheben.');
@@ -211,8 +215,8 @@ export function makeManager(board) {
           for (const badge of await getItemsByIds([...stale])) await board.remove(badge);
           members = members.filter(x=>!stale.has(x.id));
         }
-        const badges = await createCircles(currentImage,cardCount,level);
-        if (meta?.awards?.length) await reflowAwardPositions(currentImage,meta.awards);
+        const badges = await createCircles(currentImage,cardCount,level,anchor);
+        if (meta?.awards?.length) await reflowAwardPositions(currentImage,meta.awards,anchor);
         const group=await regroup([...members, ...await getItemsByIds(badges)]);
         if(group)selectedGroupIds.push(group.id);
         await currentImage.setMetadata(CARD_KEY, {
@@ -293,12 +297,19 @@ export function makeManager(board) {
   }
 
   async function absolutePosition(item) {
-    const x=Number(item.x)||0, y=Number(item.y)||0;
+    const x=Number(item.x), y=Number(item.y);
+    if(!Number.isFinite(x)||!Number.isFinite(y)) {
+      throw new Error('Kartica nema pouzdane koordinate. Operacija je zaustavljena.');
+    }
     if(!item.parentId || item.parentId==='null') return {x,y};
     let parent;
     try {parent=await board.getById(item.parentId);} catch (_) {return {x,y};}
     if(parent?.type!=='frame' || item.relativeTo!=='parent_top_left') return {x,y};
-    return {x:parent.x-parent.width/2+x,y:parent.y-parent.height/2+y};
+    const result={x:parent.x-parent.width/2+x,y:parent.y-parent.height/2+y};
+    if(!Number.isFinite(result.x)||!Number.isFinite(result.y)) {
+      throw new Error('Frame nema pouzdane koordinate. Operacija je zaustavljena.');
+    }
+    return result;
   }
 
   async function loadZones(config) {
@@ -340,8 +351,8 @@ export function makeManager(board) {
     return {updated,total:cards.length,zones:zones.length};
   }
 
-  async function awardPosition(image, slot) {
-    const position = await absolutePosition(image);
+  async function awardPosition(image, slot, anchor) {
+    const position = anchor || await absolutePosition(image);
     const size=image.width*.175;
     // Fill the rightmost column vertically, top to bottom. Wrap after six.
     const row=slot%6,column=Math.floor(slot/6);
@@ -352,12 +363,12 @@ export function makeManager(board) {
     };
   }
 
-  async function reflowAwardPositions(image, awards) {
+  async function reflowAwardPositions(image, awards, anchor) {
     for (let i=0;i<awards.length;i++) {
       let icon;
       try { icon=await board.getById(awards[i].itemId); } catch (_) { continue; }
       if (icon?.type!=='image') continue;
-      const pos=await awardPosition(image,i);
+      const pos=await awardPosition(image,i,anchor);
       icon.x=pos.x;
       icon.y=pos.y;
       await icon.sync();
@@ -370,6 +381,7 @@ export function makeManager(board) {
     const awards=Array.isArray(meta.awards) ? [...meta.awards] : [];
     const existing=awards.find(x=>x.id===slug);
     if(remove ? !existing : !!existing) return false;
+    const anchor=await absolutePosition(image);
     let members=await releaseCardGroup(image);
     const currentImage=await liveImage(image,members);
     if(remove) {
@@ -379,13 +391,13 @@ export function makeManager(board) {
     } else {
       const award=AWARDS.find(a=>a.id===slug);
       if(!award) throw new Error('Unbekannter Award.');
-      const p=await awardPosition(currentImage,awards.length);
+      const p=await awardPosition(currentImage,awards.length,anchor);
       const icon=await board.createImage({title:`Award: ${award.name}`,url:awardAssetUrl(award),x:p.x,y:p.y,width:p.size});
       await icon.setMetadata(AWARD_KEY,{cardId:currentImage.id,id:slug});
       awards.push({id:slug,itemId:icon.id});
       members.push(icon);
     }
-    await reflowAwardPositions(currentImage,awards);
+    await reflowAwardPositions(currentImage,awards,anchor);
     const group=await regroup(members);
     await currentImage.setMetadata(CARD_KEY,{...meta,awards});
     return group?.id || currentImage.groupId || null;
@@ -401,9 +413,10 @@ export function makeManager(board) {
         const {image}=cards[i];
         const meta=await readCard(image);
         if(meta?.awards?.length) {
+          const anchor=await absolutePosition(image);
           const members=await releaseCardGroup(image);
           const currentImage=await liveImage(image,members);
-          await reflowAwardPositions(currentImage,meta.awards);
+          await reflowAwardPositions(currentImage,meta.awards,anchor);
           const group=await regroup(members);
           if(group)selectedGroupIds.push(group.id);
           updated++;
