@@ -124,14 +124,21 @@ export function makeManager(board) {
 
   async function createCircles(image, count, level, anchor) {
     const ids = [];
-    for (const slot of await circleLayout(image, count, anchor)) {
-      const badge = await board.createShape({
-        content: `<p>${slot.index}</p>`, shape:'circle',
-        x:slot.x, y:slot.y, width:slot.diameter, height:slot.diameter,
-        style:levelStyle(slot.index, level, slot.diameter),
-      });
-      await badge.setMetadata(CIRCLE_KEY, {cardId:image.id, index:slot.index});
-      ids.push(badge.id);
+    try {
+      for (const slot of await circleLayout(image, count, anchor)) {
+        const badge = await board.createShape({
+          content: `<p>${slot.index}</p>`, shape:'circle',
+          x:slot.x, y:slot.y, width:slot.diameter, height:slot.diameter,
+          style:levelStyle(slot.index, level, slot.diameter),
+        });
+        ids.push(badge.id);
+        await badge.setMetadata(CIRCLE_KEY, {cardId:image.id, index:slot.index});
+      }
+    } catch(error) {
+      for (const badge of await getItemsByIds(ids)) {
+        try { await board.remove(badge); } catch(cleanupError) {console.warn('Circle cleanup failed',cleanupError);}
+      }
+      throw error;
     }
     return ids;
   }
@@ -168,6 +175,25 @@ export function makeManager(board) {
     const items = uniqueById(members);
     if (items.length < 2) return null;
     return board.group({items});
+  }
+
+  async function withReleasedCard(image, action) {
+    const originalMembers = await releaseCardGroup(image);
+    try {
+      return await action([...originalMembers]);
+    } catch (error) {
+      // A failed SDK operation must not leave the whole avatar disassembled.
+      // Reload because Miro replaces item objects when ungrouping.
+      try {
+        const survivors = await getItemsByIds(originalMembers.map(item => item.id));
+        if (survivors.length >= 2 && survivors.every(item => !item.groupId)) {
+          await regroup(survivors);
+        }
+      } catch (restoreError) {
+        console.error('Could not restore the avatar group after a failed operation', restoreError);
+      }
+      throw error;
+    }
   }
 
   async function restoreCardSelection(groupIds) {
@@ -208,21 +234,37 @@ export function makeManager(board) {
           continue;
         }
         const level = clamp(Number(meta?.level)||0, 0, cardCount);
-        let members = meta ? await releaseCardGroup(image) : [image];
-        const currentImage = await liveImage(image, members);
-        if (meta?.badgeIds) {
-          const stale = new Set(meta.badgeIds);
-          for (const badge of await getItemsByIds([...stale])) await board.remove(badge);
-          members = members.filter(x=>!stale.has(x.id));
-        }
-        const badges = await createCircles(currentImage,cardCount,level,anchor);
-        if (meta?.awards?.length) await reflowAwardPositions(currentImage,meta.awards,anchor);
-        const group=await regroup([...members, ...await getItemsByIds(badges)]);
-        if(group)selectedGroupIds.push(group.id);
-        await currentImage.setMetadata(CARD_KEY, {
-          version:1, level, count:cardCount, badgeIds:badges,
-          awards:Array.isArray(meta?.awards) ? meta.awards : [],
-        });
+        const perform = async released => {
+          let members = released;
+          const currentImage = await liveImage(image, members);
+          // Create replacements first so an SDK failure does not destroy the old circles.
+          const badges = await createCircles(currentImage,cardCount,level,anchor);
+          try {
+            if (meta?.awards?.length) await reflowAwardPositions(currentImage,meta.awards,anchor);
+            if (meta?.badgeIds) {
+              const stale = new Set(meta.badgeIds);
+              for (const badge of await getItemsByIds([...stale])) await board.remove(badge);
+              members = members.filter(x=>!stale.has(x.id));
+            }
+            const group=await regroup([...members, ...await getItemsByIds(badges)]);
+            if(group)selectedGroupIds.push(group.id);
+            await currentImage.setMetadata(CARD_KEY, {
+              version:1, level, count:cardCount, badgeIds:badges,
+              awards:Array.isArray(meta?.awards) ? meta.awards : [],
+            });
+          } catch(error) {
+            // If still ungrouped, discard only our new circles before the recovery group.
+            const live = await getItemsByIds(badges);
+            if(live.every(item=>!item.groupId)) {
+              for(const badge of live) {
+                try { await board.remove(badge); }catch(cleanupError) {console.warn('Circle cleanup failed',cleanupError);}
+              }
+            }
+            throw error;
+          }
+        };
+        if(meta) await withReleasedCard(image,perform);
+        else await perform([image]);
         updated++;
       }
       await restoreCardSelection(selectedGroupIds);
@@ -369,8 +411,31 @@ export function makeManager(board) {
       try { icon=await board.getById(awards[i].itemId); } catch (_) { continue; }
       if (icon?.type!=='image') continue;
       const pos=await awardPosition(image,i,anchor);
-      icon.x=pos.x;
-      icon.y=pos.y;
+      if (icon.parentId && icon.parentId !== 'null') {
+        const parent=await board.getById(icon.parentId);
+        if (parent?.type !== 'frame') {
+          throw new Error('Award je dete nepodržanog elementa. Pomeri ga iz kontejnera pre uređivanja.');
+        }
+        const left=parent.x-parent.width/2, top=parent.y-parent.height/2;
+        const localX=pos.x-left, localY=pos.y-top;
+        const halfW=Number(icon.width)/2 || 0,halfH=Number(icon.height)/2 || halfW;
+        const fits=localX-halfW>=0 && localX+halfW<=parent.width &&
+          localY-halfH>=0 && localY+halfH<=parent.height;
+        if (icon.relativeTo==='parent_top_left' && fits) {
+          // Keep award inside its frame, using the parent's local coordinates.
+          icon.x=localX; icon.y=localY;
+          await icon.sync();
+          continue;
+        }
+        // The card was moved to another level frame. Miro rejects moves of
+        // child images outside their old frame; detach BEFORE moving them.
+        await parent.remove(icon);
+        icon=await board.getById(icon.id);
+        if (icon.parentId && icon.parentId !== 'null') {
+          throw new Error('Miro nije uspeo da odvoji award od prethodnog Framea.');
+        }
+      }
+      icon.x=pos.x; icon.y=pos.y;
       await icon.sync();
     }
   }
@@ -382,25 +447,40 @@ export function makeManager(board) {
     const existing=awards.find(x=>x.id===slug);
     if(remove ? !existing : !!existing) return false;
     const anchor=await absolutePosition(image);
-    let members=await releaseCardGroup(image);
-    const currentImage=await liveImage(image,members);
-    if(remove) {
-      for(const img of await getItemsByIds([existing.itemId])) await board.remove(img);
-      members=members.filter(x=>x.id!==existing.itemId);
-      awards.splice(awards.indexOf(existing),1);
-    } else {
-      const award=AWARDS.find(a=>a.id===slug);
-      if(!award) throw new Error('Unbekannter Award.');
-      const p=await awardPosition(currentImage,awards.length,anchor);
-      const icon=await board.createImage({title:`Award: ${award.name}`,url:awardAssetUrl(award),x:p.x,y:p.y,width:p.size});
-      await icon.setMetadata(AWARD_KEY,{cardId:currentImage.id,id:slug});
-      awards.push({id:slug,itemId:icon.id});
-      members.push(icon);
-    }
-    await reflowAwardPositions(currentImage,awards,anchor);
-    const group=await regroup(members);
-    await currentImage.setMetadata(CARD_KEY,{...meta,awards});
-    return group?.id || currentImage.groupId || null;
+    return withReleasedCard(image,async members=>{
+      const currentImage=await liveImage(image,members);
+      let addedIcon;
+      try {
+        if(remove) {
+          awards.splice(awards.indexOf(existing),1);
+        } else {
+          const award=AWARDS.find(a=>a.id===slug);
+          if(!award) throw new Error('Unbekannter Award.');
+          const p=await awardPosition(currentImage,awards.length,anchor);
+          const icon=await board.createImage({title:`Award: ${award.name}`,url:awardAssetUrl(award),x:p.x,y:p.y,width:p.size});
+          addedIcon=icon;
+          await icon.setMetadata(AWARD_KEY,{cardId:currentImage.id,id:slug});
+          awards.push({id:slug,itemId:icon.id});
+          members.push(icon);
+        }
+        await reflowAwardPositions(currentImage,awards,anchor);
+        if(remove) {
+          for(const img of await getItemsByIds([existing.itemId])) await board.remove(img);
+          members=members.filter(x=>x.id!==existing.itemId);
+        }
+        const group=await regroup(members);
+        await currentImage.setMetadata(CARD_KEY,{...meta,awards});
+        return group?.id || currentImage.groupId || null;
+      } catch(error) {
+        if(addedIcon) {
+          try {
+            const live=await board.getById(addedIcon.id);
+            if(!live.groupId) await board.remove(live);
+          } catch(cleanupError) {console.warn('Award cleanup failed',cleanupError);}
+        }
+        throw error;
+      }
+    });
   }
 
   async function rearrangeSelectedAwards(progress=()=>{}) {
@@ -414,10 +494,11 @@ export function makeManager(board) {
         const meta=await readCard(image);
         if(meta?.awards?.length) {
           const anchor=await absolutePosition(image);
-          const members=await releaseCardGroup(image);
-          const currentImage=await liveImage(image,members);
-          await reflowAwardPositions(currentImage,meta.awards,anchor);
-          const group=await regroup(members);
+          const group=await withReleasedCard(image,async members=>{
+            const currentImage=await liveImage(image,members);
+            await reflowAwardPositions(currentImage,meta.awards,anchor);
+            return regroup(members);
+          });
           if(group)selectedGroupIds.push(group.id);
           updated++;
         } else if(image.groupId) selectedGroupIds.push(image.groupId);

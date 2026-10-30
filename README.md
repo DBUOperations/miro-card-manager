@@ -1,4 +1,10 @@
-# Caboledo / DBU – Miro Card Manager (Testversion 1)
+# Caboledo / DBU – Miro Card Manager (Testversion 1.3)
+
+**Hotfix 1.3:** Awards, die durch ein Miro-Frame als Kinder geführt werden, werden beim Neuordnen korrekt in Frame-Koordinaten bewegt. Wenn eine Karte in ein anderes Level-Frame verschoben wurde, wird das Award zuerst vom alten Frame gelöst, damit es an die neue Position verschoben werden darf. Bei einem SDK-Fehler wird die Kartengruppe soweit möglich automatisch wiederhergestellt. Neu erzeugte Icons und Kreise werden bei einem Fehler bereinigt. Das Verhalten wurde mit Mock-Tests, nicht auf einem echten Miro-Board, geprüft.
+
+**Hotfix 1.2:** Die Position wird **vor dem Entgruppieren** gespeichert, denn Miro kann bei einer Gruppe/Frame die Koordinatenreferenz beim Entgruppieren ändern. Für die Level-Prüfung wird weiterhin dieselbe absolute Position verwendet. Auto Level wird zusätzlich bei einer geänderten Auswahl und mindestens alle 15 Sekunden geprüft, falls das experimentelle Move-Event ausbleibt. Ungültige Koordinaten stoppen die Aktion.
+
+**Änderungen in v1.1:** Das Panel hat einen eigenen vertikalen Scrollbereich. Awards werden zuerst von oben nach unten angeordnet (sechs je Spalte, danach nächste Spalte). Beim Ändern der Level-Anzahl wird die aktuelle Kartenposition nach dem Aufheben der Gruppierung neu ausgelesen. Unter „Karten vorbereiten“ repariert **Kreis-Positionen korrigieren** bereits falsch platzierte Kreise, ohne Level und Kreisanzahl zu ändern. Unter „Awards vergeben“ setzt **Vorhandene Awards vertikal anordnen** bereits vergebene Awards in das neue Layout.
 
 Echte Miro-Web-SDK-App: 20 oder mehr Avatar-Karten als einzelne Gruppen vorbereiten, 2–10 Level-Kreise vergeben, Level-Felder verknüpfen und 13 Award-Grafiken hinzufügen. Die App läuft statisch auf GitHub Pages. **Kein Netlify, n8n, OpenAI-Schlüssel oder Server erforderlich.**
 
