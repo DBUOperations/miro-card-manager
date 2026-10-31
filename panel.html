@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Caboledo Card Manager</title>
-  <link rel="stylesheet" href="./style.css?v=1.7.0">
+  <link rel="stylesheet" href="./style.css?v=1.8.0">
 </head>
 <body>
   <main class="app">
@@ -31,36 +31,20 @@
     </section>
 
     <section class="section">
-      <div class="section-title"><span class="number">02</span><h2>Level-Felder verbinden</h2></div>
-      <p class="hint">Wähle genau ein Rechteck oder Frame im Board aus und ordne ihm ein Level zu. Das Feld darf später verschoben werden.</p>
-      <div class="row">
-        <select id="zone-level" aria-label="Level für das ausgewählte Feld"></select>
-        <button id="assign-zone" class="button secondary">Feld zuweisen</button>
-      </div>
-      <div class="row compact">
-        <button id="remove-zone" class="button ghost">Zuweisung entfernen</button>
-        <span id="zone-summary" class="hint">Nur bei Aktion geprüft</span>
-      </div>
+      <div class="section-title"><span class="number">02</span><h2>Level anwenden</h2></div>
+      <p class="hint">Vorbereitete Karten auswählen und direkt einen Level anklicken. Nur der Klick startet eine Miro-Aktion.</p>
+      <div id="level-buttons" class="level-buttons" aria-label="Level direkt zuweisen"></div>
+      <p class="hint" style="margin:10px 0 0">Keine automatischen Prüfungen beim Bewegen oder Auswählen.</p>
     </section>
 
     <section class="section">
-      <div class="section-title"><span class="number">03</span><h2>Level anwenden</h2></div>
-      <div class="row">
-        <select id="manual-level" aria-label="Level für ausgewählte Karten"></select>
-        <button id="set-level" class="button secondary">Level setzen</button>
-      </div>
-      <p class="hint">Manueller Modus: Keine Hintergrundabfragen bei Bewegungen oder Auswahl.</p>
-      <button id="sync-levels" class="button outline">↻ Level der Auswahl prüfen</button>
-    </section>
-
-    <section class="section">
-      <div class="section-title"><span class="number">04</span><h2>Awards vergeben</h2></div>
-      <p class="hint">Eine oder mehrere vorbereitete Karten auswählen. Award hinzufügen oder entfernen.</p>
+      <div class="section-title"><span class="number">03</span><h2>Awards vergeben</h2></div>
+      <p class="hint">Eine oder mehrere vorbereitete Karten auswählen. Maximal 4 Awards pro Karte. Award hinzufügen oder entfernen.</p>
       <button id="rearrange-awards" class="button outline" style="margin-bottom:12px">↧ Vorhandene Awards vertikal anordnen</button>
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.7 · Manual Only</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.8 · Manual Only</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
@@ -74,6 +58,6 @@
       message.className='message visible error';
     },8000);
   </script>
-  <script type="module" src="./panel.js?v=1.7.0"></script>
+  <script type="module" src="./panel.js?v=1.8.0"></script>
 </body>
 </html>

@@ -1,7 +1,5 @@
 import {AWARDS, awardAssetUrl} from './awards.js';
 
-const STORE = 'dbu-card-manager-v1';
-const CONFIG_KEY = 'settings';
 const CARD_KEY = 'dbu_cm_card_v1';
 const CIRCLE_KEY = 'dbu_cm_circle_v1';
 const AWARD_KEY = 'dbu_cm_award_v1';
@@ -13,10 +11,9 @@ const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const uniqueById = values => [...new Map(values.filter(Boolean).map(x => [x.id, x])).values()];
 
 export function makeManager(board, options={}) {
-  if (!board?.getSelection || !board?.group || !board?.storage?.collection) {
+  if (!board?.getSelection || !board?.group) {
     throw new Error('Miro SDK nije dostupan. Otvori aplikaciju u Miro boardu.');
   }
-  const collection = board.storage.collection(STORE);
   let statusHandler=()=>{};
   const sleep=options.sleep || (ms=>new Promise(resolve=>setTimeout(resolve,ms)));
   const creditHistory=[];
@@ -58,20 +55,6 @@ export function makeManager(board, options={}) {
   const getMembers=group=>sdkCall(()=>group.getItems());
   const removeItem=item=>sdkCall(()=>board.remove(item));
   const getLayerIndex=item=>sdkCall(()=>board.getLayerIndex(item));
-
-  async function getConfig() {
-    const saved = await collection.get(CONFIG_KEY) || {};
-    return {
-      levelCount: clamp(Number(saved.levelCount) || 6, 2, 10),
-      zones: saved.zones && typeof saved.zones === 'object' ? {...saved.zones} : {},
-    };
-  }
-
-  async function putConfig(changes) {
-    const next = {...await getConfig(), ...changes};
-    await collection.set(CONFIG_KEY, next);
-    return next;
-  }
 
   async function withMutation(action) {
     // Manual-only mode does not require SDK storage reads/writes for pauses.
@@ -138,22 +121,32 @@ export function makeManager(board, options={}) {
 
   async function circleLayout(image, n, anchor) {
     const w = image.width, h = image.height;
-    const gap = w * 0.023;
-    const d = Math.min(w * 0.105, (w * 0.86 - (n - 1) * gap) / n);
+    // Preserve the existing six-circle layout exactly. For 7-10 levels,
+    // keep the badge HEIGHT unchanged and fit rounded rectangles across
+    // the card; no tiny or illegible circles.
+    const compact = n > 6;
+    const gap = w * (compact ? .012 : .023);
+    const height = w * .105;
+    const width = compact
+      ? Math.min(height,(w * .94 - (n-1)*gap)/n)
+      : Math.min(height,(w * .86-(n-1)*gap)/n);
     const position = anchor || await absolutePosition(image);
-    const start = position.x - (n * d + (n - 1) * gap) / 2 + d / 2;
+    const start = position.x-(n*width+(n-1)*gap)/2+width/2;
     const y = position.y + h * (277 / 295 - .5);
-    return Array.from({length:n}, (_,i)=>({x:start+i*(d+gap),y,diameter:d,index:i+1}));
+    return Array.from({length:n}, (_,i)=>({
+      x:start+i*(width+gap),y,width,height,
+      shape:compact && n>7?'round_rectangle':'circle',index:i+1,
+    }));
   }
 
-  function levelStyle(index, level, diameter) {
+  function levelStyle(index, level, width, height=width) {
     const active = index <= level;
     return {
       fillColor: active ? YELLOW : MUTED,
       color: active ? INK : '#FFFFFF',
       borderWidth: 0,
       fontFamily: 'arial',
-      fontSize: Math.max(7, diameter * .53),
+      fontSize: Math.max(7,Math.min(height*.53,width/(index>=10?1.45:1.1))),
       textAlign: 'center',
       textAlignVertical: 'middle',
     };
@@ -164,9 +157,9 @@ export function makeManager(board, options={}) {
     try {
       for (const slot of await circleLayout(image, count, anchor)) {
         const badge = await sdkCall(()=>board.createShape({
-          content: `<p>${slot.index}</p>`, shape:'circle',
-          x:slot.x, y:slot.y, width:slot.diameter, height:slot.diameter,
-          style:levelStyle(slot.index, level, slot.diameter),
+          content: `<p>${slot.index}</p>`, shape:slot.shape,
+          x:slot.x, y:slot.y, width:slot.width, height:slot.height,
+          style:levelStyle(slot.index, level, slot.width, slot.height),
         }));
         ids.push(badge.id);
         await setMetadata(badge,CIRCLE_KEY, {cardId:image.id, index:slot.index});
@@ -305,7 +298,6 @@ export function makeManager(board, options={}) {
     if (!cards.length) throw new Error('Bitte zuerst eine oder mehrere Avatar-Karten auswählen.');
     count = clamp(Number(count) || 6, 2, 10);
     return withMutation(async () => {
-      if (!repair) await putConfig({levelCount:count});
       let updated=0, unchanged=0;
       const selectedGroupIds=[];
       for (let i=0;i<cards.length;i++) {
@@ -320,7 +312,17 @@ export function makeManager(board, options={}) {
         if (!meta && image.groupId) {
           throw new Error('Eine neue Avatar-Karte ist bereits gruppiert. Bitte zuerst Gruppierung aufheben.');
         }
-        if (!repair && meta && meta.count === cardCount && meta.badgeIds?.length === cardCount) {
+        let layoutOutdated=false;
+        if(!repair && meta && cardCount>6 && meta.count===cardCount && meta.badgeIds?.length===cardCount) {
+          // Upgrade cards prepared by older releases only when the user
+          // explicitly clicks 'Level-Zahlen hinzufügen'.
+          const first=await getItemsByIds(meta.badgeIds.slice(0,1));
+          const slots=await circleLayout(image,cardCount,anchor);
+          layoutOutdated=!first.length || first[0].shape!==slots[0].shape ||
+            Math.abs(first[0].width-slots[0].width)>0.5 ||
+            Math.abs(first[0].height-slots[0].height)>0.5;
+        }
+        if (!repair && !layoutOutdated && meta && meta.count === cardCount && meta.badgeIds?.length === cardCount) {
           unchanged++;
           if(image.groupId)selectedGroupIds.push(image.groupId);
           continue;
@@ -397,7 +399,6 @@ export function makeManager(board, options={}) {
       await requireCanvasItems(members,'Reset');
     }
     return withMutation(async()=>{
-      await putConfig({levelCount:count});
       const groupIds=[];
       let reset=0;
       for(const {image,meta} of cards) {
@@ -570,7 +571,9 @@ export function makeManager(board, options={}) {
       if(tag?.cardId!==image.id || tag?.index!==i+1)issues.push('Kreis-Metadaten');
       const pos=await absolutePosition(badge);
       if(Math.abs(pos.x-slots[i].x)>1 || Math.abs(pos.y-slots[i].y)>1)issues.push('Kreispositionen');
-      const style=levelStyle(i+1,meta.level,badge.width);
+      if(badge.shape!==slots[i].shape || Math.abs(badge.width-slots[i].width)>0.5 ||
+        Math.abs(badge.height-slots[i].height)>0.5)issues.push('Kreisgrößen');
+      const style=levelStyle(i+1,meta.level,badge.width,badge.height);
       if(badge.style?.fillColor!==style.fillColor || badge.style?.color!==style.color)issues.push('Kreisfarben');
     }
     const awards=Array.isArray(meta.awards)?meta.awards:[];
@@ -680,18 +683,26 @@ export function makeManager(board, options={}) {
     });
   }
 
-  async function setLevel(image, requested) {
-    const meta = await readCard(image);
+  async function setLevel(image, requested, providedMeta) {
+    const meta = providedMeta || await readCard(image);
     if (!meta) return false;
     const level = clamp(Number(requested) || 0,0,meta.count);
     if (level === meta.level) return false;
+    const targets=[];
     for (const [i,id] of meta.badgeIds.entries()) {
       const index=i+1;
       if ((index<=meta.level)===(index<=level)) continue;
       let shape;
-      try {shape=await getById(id);} catch (err) {if(isRateLimit(err))throw err;continue;}
-      if (shape.type !== 'shape') continue;
-      const style=levelStyle(index,level,shape.width);
+      try {shape=await getById(id);} catch(err) {
+        if(isRateLimit(err))throw err;
+        throw new Error(`Level-Zahl ${index} fehlt. Bitte zuerst Repair ausführen.`);
+      }
+      if (shape.type !== 'shape')throw new Error(`Level-Zahl ${index} ist beschädigt. Bitte zuerst Repair ausführen.`);
+      targets.push({shape,index});
+    }
+    // All required badges exist before the first color write.
+    for(const {shape,index} of targets) {
+      const style=levelStyle(index,level,shape.width,shape.height);
       shape.style.fillColor=style.fillColor;
       shape.style.color=style.color;
       await syncItem(shape);
@@ -703,41 +714,23 @@ export function makeManager(board, options={}) {
   async function setSelectedLevel(level, progress=()=>{}) {
     const cards=await selectedCards({allowNew:false});
     if (!cards.length) throw new Error('Zuerst Karten initialisieren und auswählen.');
+    const requested=Math.round(Number(level));
+    if(!Number.isInteger(requested) || requested<1 || requested>10)throw new Error('Bitte einen Level von 1 bis 10 auswählen.');
+    if(cards.some(card=>!card.meta || card.meta.count<requested)) {
+      throw new Error(`Level ${requested} ist nicht auf allen ausgewählten Karten vorbereitet. Bitte zuerst "Level-Zahlen hinzufügen" klicken.`);
+    }
     return withMutation(async()=>{
       let updated=0;
       for (let i=0;i<cards.length;i++) {
-        if(await setLevel(cards[i].image,level)) updated++;
+        try {
+          if(await setLevel(cards[i].image,requested,cards[i].meta)) updated++;
+        } catch(error) {
+          throw new Error(`Level ${requested}: ${updated} von ${cards.length} Karten aktualisiert, danach Fehler: ${error.message}`);
+        }
         progress(i+1,cards.length);
       }
       return {updated,total:cards.length};
     });
-  }
-
-  async function assignSelectedZone(level) {
-    const selection=await getSelection();
-    if(selection.length!==1 || !['shape','frame'].includes(selection[0].type)) {
-      throw new Error('Bitte genau ein Level-Feld auswählen (Shape oder Frame).');
-    }
-    const item=selection[0];
-    if (item.type==='shape' && await getMetadata(item,CIRCLE_KEY)) {
-      throw new Error('Bitte ein Level-Feld auswählen, keinen Kreis auf einer Karte.');
-    }
-    const cfg=await getConfig();
-    level=clamp(Number(level)||1,1,cfg.levelCount);
-    const zones={...cfg.zones,[item.id]:level};
-    await putConfig({zones});
-    return {id:item.id,level,type:item.type};
-  }
-
-  async function unassignSelectedZone() {
-    const selection=await getSelection();
-    if(selection.length!==1 || !selection[0]?.id) throw new Error('Bitte ein Level-Feld auswählen.');
-    const cfg=await getConfig();
-    if (!Object.hasOwn(cfg.zones,selection[0].id)) return false;
-    const zones={...cfg.zones};
-    delete zones[selection[0].id];
-    await putConfig({zones});
-    return true;
   }
 
   async function absolutePosition(item) {
@@ -754,47 +747,6 @@ export function makeManager(board, options={}) {
       throw new Error('Frame nema pouzdane koordinate. Operacija je zaustavljena.');
     }
     return result;
-  }
-
-  async function loadZones(config) {
-    const found=[];
-    for(const [id,level] of Object.entries(config.zones)) {
-      let zone;
-      try {zone=await getById(id);} catch (err) {if(isRateLimit(err))throw err;continue;}
-      if(!zone || !['shape','frame'].includes(zone.type)) continue;
-      const pos=await absolutePosition(zone);
-      const width=Number(zone.width),height=Number(zone.height);
-      if (!(width>0 && height>0)) continue;
-      found.push({id,level:Number(level),zone,x:pos.x,y:pos.y,width,height,area:width*height});
-    }
-    return found;
-  }
-
-  async function detectedLevel(image,zones) {
-    // A card nested in a mapped frame belongs to that frame, even when the frame moves.
-    const parent=zones.find(z=>z.zone.type==='frame' && z.id===image.parentId);
-    if(parent) return parent.level;
-    const {x,y}=await absolutePosition(image);
-    const matches=zones.filter(z=>Math.abs(x-z.x)<=z.width/2 && Math.abs(y-z.y)<=z.height/2);
-    if(!matches.length) return null; // Outside all zones: retain the previous level.
-    matches.sort((a,b)=>a.area-b.area);
-    return matches[0].level;
-  }
-
-  async function syncSelectedLevels(progress=()=>{}) {
-    // Explicit command: never scan the entire board; inspect selected cards.
-    const cards=await selectedCards({allowNew:false});
-    if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
-    const zones=await loadZones(await getConfig());
-    return withMutation(async()=>{
-      let updated=0;
-      for(let i=0;i<cards.length;i++) {
-        const target=await detectedLevel(cards[i].image,zones);
-        if(target!==null && await setLevel(cards[i].image,target))updated++;
-        progress(i+1,cards.length);
-      }
-      return {updated,total:cards.length,zones:zones.length};
-    });
   }
 
   async function awardPosition(image, slot, anchor) {
@@ -840,6 +792,7 @@ export function makeManager(board, options={}) {
     const awards=Array.isArray(meta.awards) ? [...meta.awards] : [];
     const existing=awards.find(x=>x.id===slug);
     if(remove ? !existing : !!existing) return false;
+    if(!remove && awards.length>=4)return false;
     const anchor=await absolutePosition(image);
     return withReleasedCard(image,async members=>{
       const currentImage=await liveImage(image,members);
@@ -914,23 +867,36 @@ export function makeManager(board, options={}) {
     const cards=await selectedCards({allowNew:false});
     if(!cards.length) throw new Error('Bitte initialisierte Karten auswählen.');
     return withMutation(async()=>{
-      let changed=0;
+      let changed=0,skippedLimit=0;
       const selectedGroupIds=[];
       for(let i=0;i<cards.length;i++) {
-        const updatedGroup=await modifyAwardForCard(cards[i].image,slug,remove);
+        if(!remove && (cards[i].meta?.awards?.length||0)>=4 &&
+          !cards[i].meta.awards.some(award=>award.id===slug)) {
+          skippedLimit++;
+          if(cards[i].image.groupId)selectedGroupIds.push(cards[i].image.groupId);
+          progress(i+1,cards.length);
+          continue;
+        }
+        let updatedGroup;
+        try {
+          updatedGroup=await modifyAwardForCard(cards[i].image,slug,remove);
+        } catch(error) {
+          if(changed)await restoreCardSelection(selectedGroupIds);
+          throw new Error(`${changed} von ${cards.length} Karten aktualisiert, danach Fehler: ${error.message}`);
+        }
         if(updatedGroup) changed++;
         selectedGroupIds.push(updatedGroup || cards[i].image.groupId);
         progress(i+1,cards.length);
       }
-      await restoreCardSelection(selectedGroupIds);
-      return {changed,total:cards.length};
+      if(changed)await restoreCardSelection(selectedGroupIds);
+      return {changed,total:cards.length,skippedLimit};
     });
   }
 
   return {
-    getConfig,putConfig,selectionInfo,selectedCards,initializeSelected,repairSelected,
+    version:'1.8.0',selectionInfo,selectedCards,initializeSelected,repairSelected,
     resetSelected,arrangeSelectedGrid,layersSelected,checkAndRepairSelected,
-    setSelectedLevel,assignSelectedZone,unassignSelectedZone,syncSelectedLevels,changeAward,rearrangeSelectedAwards,
+    setSelectedLevel,changeAward,rearrangeSelectedAwards,
     setStatusHandler:fn=>{statusHandler=typeof fn==='function'?fn:()=>{};},
   };
 }

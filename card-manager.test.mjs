@@ -83,7 +83,7 @@ class MockBoard {
   async deselect(){this.selected=[];}
 }
 
-test('20 selected avatars: level badges, grouping, zone moves, awards, and reconfiguration',async()=>{
+test('20 selected avatars: level badges, grouping, manual levels, awards, and reconfiguration',async()=>{
   const board=new MockBoard();const manager=makeManager(board);
   const images=Array.from({length:20},(_,i)=>board.add('image',{width:170,height:295,x:i*230,y:0,title:`Avatar ${i}`}));
   board.select(images);
@@ -99,15 +99,12 @@ test('20 selected avatars: level badges, grouping, zone moves, awards, and recon
   assert.equal(info.level,3);
   for(let i=0;i<6;i++)assert.equal((await board.getById(info.badgeIds[i])).style.fillColor,i<3?'#FFEC00':'#514663');
 
-  const zone=board.add('shape',{x:500,y:0,width:450,height:450});
-  board.select([zone]);
-  await manager.assignSelectedZone(5);
-  images[0].x=500;
-  board.select(images.slice(0,2).map(x=>board.items.get(x.groupId)));
-  await manager.syncSelectedLevels();
-  assert.equal((await images[0].getMetadata('dbu_cm_card_v1')).level,5);
-  zone.x=1500;images[0].x=1500;
-  await manager.syncSelectedLevels();
+  // Dragging alone leaves the Level unchanged. Only an explicit click updates it.
+  const firstGroup=board.items.get(images[0].groupId);
+  firstGroup.move(500,0);
+  assert.equal((await images[0].getMetadata('dbu_cm_card_v1')).level,3);
+  board.select([firstGroup]);
+  await manager.setSelectedLevel(5);
   assert.equal((await images[0].getMetadata('dbu_cm_card_v1')).level,5);
 
   board.select(images.slice(0,2).map(x=>board.items.get(x.groupId)));
@@ -124,6 +121,92 @@ test('20 selected avatars: level badges, grouping, zone moves, awards, and recon
   assert.equal((await manager.initializeSelected(8)).updated,2);
   assert.equal((await images[0].getMetadata('dbu_cm_card_v1')).badgeIds.length,8);
   assert.equal((await board.get({type:'group'})).length,20);
+});
+
+test('badge geometry keeps 2–6 original circles and makes 8–10 legible at the same height',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const image=board.add('image',{width:170,height:295,x:0,y:0});
+  board.select([image]);
+  for(const count of [2,3,4,5,6,7,8,9,10]) {
+    await manager.initializeSelected(count);
+    const meta=await (await board.getById(image.id)).getMetadata('dbu_cm_card_v1');
+    const badges=await Promise.all(meta.badgeIds.map(id=>board.getById(id)));
+    const heights=badges.map(b=>b.height);
+    assert.ok(heights.every(h=>Math.abs(h-17.85)<0.001),`constant badge height for ${count}`);
+    assert.equal(badges[0].shape,count<=7?'circle':'round_rectangle');
+    if(count<=6)assert.ok(badges.every(b=>Math.abs(b.width-17.85)<.001),`original circles for ${count}`);
+    if(count>=9)assert.ok(badges.every(b=>b.width<b.height),`narrow badges for ${count}`);
+    const left=badges[0].x-badges[0].width/2;
+    const right=badges.at(-1).x+badges.at(-1).width/2;
+    assert.ok(left>=-85 && right<=85,`all ${count} badges fit inside the image width`);
+    assert.ok(badges.every(b=>b.groupId===(board.items.get(image.id)).groupId),'all badges remain grouped');
+  }
+  const ten=await board.getById((await image.getMetadata('dbu_cm_card_v1')).badgeIds[9]);
+  assert.ok(ten.style.fontSize>=7,'two-digit number has a readable minimum font size');
+});
+
+test('repreparing a legacy 10-circle card upgrades old tiny circles only on explicit command',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const image=board.add('image',{width:170,height:295,x:0,y:0});
+  board.select([image]);await manager.initializeSelected(10);
+  const initial=await image.getMetadata('dbu_cm_card_v1');
+  const old=await board.getById(initial.badgeIds[0]);
+  old.shape='circle';old.width=10;old.height=10;
+  const result=await manager.initializeSelected(10);
+  assert.equal(result.updated,1);
+  const next=await image.getMetadata('dbu_cm_card_v1');
+  assert.equal((await board.getById(next.badgeIds[0])).shape,'round_rectangle');
+  assert.equal((await board.get({type:'group'})).length,1);
+  assert.equal((await board.get({type:'shape'})).length,10);
+});
+
+test('cannot set Level 10 on cards prepared with only six badges; fails before changing any card',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const a=board.add('image',{width:170,height:295,x:0,y:0});
+  const b=board.add('image',{width:170,height:295,x:240,y:0});
+  board.select([a]);await manager.initializeSelected(10);
+  board.select([b]);await manager.initializeSelected(6);
+  board.select([
+    board.items.get((await board.getById(a.id)).groupId),
+    board.items.get((await board.getById(b.id)).groupId),
+  ]);
+  await assert.rejects(()=>manager.setSelectedLevel(10),/nicht auf allen/);
+  assert.equal((await a.getMetadata('dbu_cm_card_v1')).level,0);
+  assert.equal((await b.getMetadata('dbu_cm_card_v1')).level,0);
+});
+
+test('manual Level command is a no-op when already set and stops safely if a required badge is missing',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const image=board.add('image',{width:170,height:295,x:0,y:0});
+  board.select([image]);await manager.initializeSelected(6);
+  board.select([board.items.get(image.groupId)]);
+  await manager.setSelectedLevel(3);
+  const before=board.synced;
+  assert.deepEqual(await manager.setSelectedLevel(3),{updated:0,total:1});
+  assert.equal(board.synced,before,'already selected Level produces no sync writes');
+  const meta=await image.getMetadata('dbu_cm_card_v1');
+  await board.remove(await board.getById(meta.badgeIds[4]));
+  await assert.rejects(()=>manager.setSelectedLevel(6),/Repair ausführen/);
+  assert.equal((await image.getMetadata('dbu_cm_card_v1')).level,3,'metadata level remains unchanged');
+  assert.equal((await board.getById(meta.badgeIds[3])).style.fillColor,'#514663','no colors changed before detecting missing badge');
+});
+
+test('four-award limit is per card: on multi-selection a full card is skipped, the other is updated',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const a=board.add('image',{width:170,height:295,x:0,y:0});
+  const b=board.add('image',{width:170,height:295,x:240,y:0});
+  board.select([a,b]);await manager.initializeSelected(6);
+  board.select([board.items.get(a.groupId)]);
+  for(const award of AWARDS.slice(0,4))await manager.changeAward(award.id);
+  board.select([
+    board.items.get((await board.getById(a.id)).groupId),
+    board.items.get((await board.getById(b.id)).groupId),
+  ]);
+  const result=await manager.changeAward(AWARDS[4].id);
+  assert.deepEqual(result,{changed:1,total:2,skippedLimit:1});
+  assert.equal((await a.getMetadata('dbu_cm_card_v1')).awards.length,4);
+  assert.equal((await b.getMetadata('dbu_cm_card_v1')).awards.length,1);
+  assert.equal((await board.get({type:'group'})).length,2);
 });
 
 test('protect unrelated manual groups',async()=>{
@@ -368,7 +451,7 @@ test('adding an award succeeds even if existing award would reject an SDK sync',
   assert.equal(existing.failNextSync,true);
 });
 
-test('all 13 awards can be added sequentially without repositioning previous awards',async()=>{
+test('13 award choices remain, but each card is limited to four without moving existing icons',async()=>{
   const board=new MockBoard(),manager=makeManager(board);
   const image=board.add('image',{width:170,height:295,x:100,y:150});
   board.select([image]);
@@ -376,12 +459,13 @@ test('all 13 awards can be added sequentially without repositioning previous awa
   for(const award of AWARDS)await manager.changeAward(award.id);
   const meta=await image.getMetadata('dbu_cm_card_v1');
   const icons=await Promise.all(meta.awards.map(a=>board.getById(a.itemId)));
-  assert.equal(meta.awards.length,13);
+  assert.equal(AWARDS.length,13);
+  assert.equal(meta.awards.length,4);
   assert.equal((await board.get({type:'group'})).length,1);
   assert.ok(icons.every(item=>item.groupId===(board.items.get(image.id)).groupId));
-  // First six stack vertically. Seventh begins the next column.
+  // Four icons stack vertically. No fifth is created.
   assert.ok(icons[0].y<icons[1].y);
-  assert.ok(icons[0].x>icons[6].x);
+  assert.ok(icons.every(icon=>icon.x===icons[0].x));
 });
 
 test('repair of an accidentally ungrouped card retrieves orphan awards and restores circles',async()=>{
@@ -436,7 +520,7 @@ test('Full Reset preserves avatars and groups, sets level zero and chosen circle
   for(const id of oldAwards)await assert.rejects(()=>board.getById(id),/not found/);
   const untouched=await images[2].getMetadata('dbu_cm_card_v1');
   assert.equal(untouched.count,6);
-  assert.equal((await manager.getConfig()).levelCount,10);
+  assert.equal(manager.version,'1.8.0');
 });
 
 test('Full Reset refuses a group with unrelated objects before mutating anything',async()=>{
@@ -543,13 +627,11 @@ test('Check & Repair restores a missing circle and deleted award while keeping t
   assert.equal((await board.getById(next.awards[0].itemId)).groupId,(await board.getById(image.id)).groupId);
 });
 
-test('manual level command checks only selected cards, never scans all board items',async()=>{
+test('manual level command changes only selected cards, never scans all board items',async()=>{
   const board=new MockBoard(),manager=makeManager(board);
-  const zone=board.add('shape',{x:700,y:200,width:300,height:400});
   const a=board.add('image',{width:170,height:295,x:0,y:200});
   const b=board.add('image',{width:170,height:295,x:250,y:200});
   board.select([a,b]);await manager.initializeSelected(6);
-  board.select([zone]);await manager.assignSelectedZone(5);
   let fullScans=0;
   const previousGet=board.get.bind(board);
   board.get=async options=>{fullScans++;return previousGet(options);};
@@ -557,17 +639,15 @@ test('manual level command checks only selected cards, never scans all board ite
   aGroup.move(700,0);
   board.select([aGroup]);
   assert.equal((await a.getMetadata('dbu_cm_card_v1')).level,0,'moving is inert without click');
-  const result=await manager.syncSelectedLevels();
+  const result=await manager.setSelectedLevel(5);
   assert.equal(result.updated,1);
   assert.equal((await a.getMetadata('dbu_cm_card_v1')).level,5);
   assert.equal((await b.getMetadata('dbu_cm_card_v1')).level,0);
   assert.equal(fullScans,0,'manual level must not scan every image on the board');
-  zone.x=250;
   board.select([board.items.get(b.groupId)]);
-  assert.equal((await b.getMetadata('dbu_cm_card_v1')).level,0,'moving a zone is also inert');
-  await manager.syncSelectedLevels();
-  assert.equal(fullScans,0,'even after moving a zone, only selected avatars are checked');
-  assert.equal((await b.getMetadata('dbu_cm_card_v1')).level,5);
+  assert.equal((await b.getMetadata('dbu_cm_card_v1')).level,0,'other card stays unchanged');
+  assert.equal((await manager.setSelectedLevel(1)).updated,1);
+  assert.equal(fullScans,0,'each direct level command inspects only selection');
 });
 
 test('automatic visual layers keep overlapping cards and badges in contiguous stacks',async()=>{
