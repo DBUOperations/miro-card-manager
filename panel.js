@@ -1,4 +1,4 @@
-import {makeManager} from './core.js';
+import {makeManager} from './core.js?v=1.6.1';
 import {AWARDS,awardAssetUrl} from './awards.js';
 
 const $=id=>document.getElementById(id);
@@ -8,13 +8,16 @@ if(!board) {
   throw new Error('Miro Web SDK unavailable');
 }
 const manager=makeManager(board);
-manager.setStatusHandler(message=>{
-  if(busy)$('busy-text').textContent=message;
-});
 let levelCount=6;
 let busy=false;
 let toastTimer;
 let selectionDebounce;
+// The panel must still render if a browser temporarily has an older core.js
+// in its cache. Warn instead of stopping execution before the award gallery.
+const coreCompatible=typeof manager.syncChanged==='function';
+manager.setStatusHandler?.(message=>{
+  if(busy)$('busy-text').textContent=message;
+});
 
 function toast(text,error=false) {
   const el=$('message');
@@ -202,5 +205,8 @@ board.ui.on('selection:update',()=>{
   selectionDebounce=setTimeout(refreshSelection,400);
 });
 
+preview();
 awardGallery();
+window.__dbuPanelReady=true;
+if(!coreCompatible)toast('Miro hat alte App-Dateien geladen. Bitte Board mit Strg+Shift+R neu laden.',true);
 refreshConfig().catch(e=>toast(e.message,true));

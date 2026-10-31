@@ -1,4 +1,6 @@
-# Caboledo / DBU – Miro Card Manager (Testversion 1.6)
+# Caboledo / DBU – Miro Card Manager (Testversion 1.6.1)
+
+**Hotfix 1.6.1 (Ladefehler):** Die Dateiimporte, HTML-Skripte und Panel-URL verwenden nun dieselbe feste Versionskennung, sodass Miro/GitHub Pages nach einem Update keine alte `core.js` mit einer neuen `panel.js` kombinieren soll. Der Panel-Start bleibt auch bei einer älteren Core-Version sichtbar, und fehlgeschlagene Modul-Initialisierung zeigt einen Hinweis statt leerer Menüs. **Alle sieben Dateien aus dem Update-ZIP gemeinsam im Repository ersetzen**, dann das Board hart neu laden. `awards.js`, Styles und Award-Grafiken bleiben unverändert. Falls Miro die alte Headless-Seite weiter zwischenspeichert, in den Miro-Developer-Einstellungen die App-URL auf `https://dbuoperations.github.io/miro-card-manager/index.html?v=1.6.1` setzen und die App erneut öffnen.
 
 **Neu in 1.6 – weniger SDK-Verbrauch und stabilere Ebenen:**
 

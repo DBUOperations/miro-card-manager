@@ -1,9 +1,9 @@
-import {makeManager} from './core.js';
+import {makeManager} from './core.js?v=1.6.1';
 
 const board=window.miro?.board;
 if(board?.ui) {
   const manager=makeManager(board);
-  board.ui.on('icon:click',async()=>board.ui.openPanel({url:'panel.html'}));
+  board.ui.on('icon:click',async()=>board.ui.openPanel({url:'panel.html?v=1.6.1'}));
 
   // Miro update events do not cost SDK credits. Inspect only moved cards;
   // keep a rare full scan in case the experimental event was missed.

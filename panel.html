@@ -63,11 +63,20 @@
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.6</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.6.1</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
   <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
-  <script type="module" src="./panel.js"></script>
+  <script>
+    window.__dbuPanelReady=false;
+    setTimeout(()=>{
+      if(window.__dbuPanelReady)return;
+      const message=document.getElementById('message');
+      message.textContent='App-Dateien konnten nicht geladen werden. Bitte Board neu laden (Strg+Shift+R).';
+      message.className='message visible error';
+    },8000);
+  </script>
+  <script type="module" src="./panel.js?v=1.6.1"></script>
 </body>
 </html>
