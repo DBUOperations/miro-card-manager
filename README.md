@@ -1,4 +1,18 @@
-# Caboledo / DBU – Miro Card Manager (Testversion 1.6.1)
+# Caboledo / DBU – Miro Card Manager (Testversion 1.7.0)
+
+## WICHTIG: 1.7.0 – ausschliesslich manuelle Aktionen (Manual Only)
+
+**Die App führt im Hintergrund keinerlei Miro-SDK-Abfragen aus.** Es gibt **kein Auto Level**, keine `items:update`- oder `selection:update`-Listener, keine Timer, keine Scans bei Kartenbewegungen und auch keine regelmässigen Sicherheitsabgleiche. Das gilt auch, wenn 20 Gäste gleichzeitig ihre Karten verschieben. Das Headless-Skript registriert ausschliesslich den Klick zum Öffnen des Panels. Das Panel liest bei seinem Start weder die Auswahl noch die Board-Einstellungen.
+
+- **SDK-Kredite entstehen nur bei einem bewusst ausgelösten Befehl:** „↻ Prüfen“ (Auswahl anzeigen), „Level-Zahlen hinzufügen“, Reset, Grid, Repair, Layers, Feld zuweisen/entfernen, „Level setzen“, „Level der Auswahl prüfen“ oder Awards hinzufügen/entfernen/anordnen.
+- **Nur ausgewählte Karten:** Level, Reset, Repair, Grid, Layers und Awards arbeiten ausschliesslich mit den ausgewählten Karten. „Level der Auswahl prüfen“ liest zusätzlich die zuvor zugewiesenen Level-Rechtecke bzw. Frames zur Positionsbestimmung, **nie alle Board-Avatare**.
+- **Aktuelle Koordinaten:** Beim Hinzufügen von Awards wird die Position der betroffenen Karte direkt vor der Aktion ermittelt. Die Level-Zuordnung über Rechtecke wird erst auf ausdrücklichen Klick auf „Level der Auswahl prüfen“ aktualisiert. **Bewegungen allein verändern den Level nicht mehr.**
+- **Auswahl-Anzeige:** „–“ bei einem neuen Panel ist beabsichtigt. Über den kleinen Button **„↻ Prüfen“** wird die aktuell ausgewählte Kartenanzahl geladen, ohne dabei Karten zu verändern.
+- **Kein unnötiger Nachscan:** Nach Einzeloperationen wird nicht automatisch über alle Karten gegangen. Ein gezieltes Korrigieren von Kreis-/Award-Ebenen der betroffenen Kartengruppe kann Teil des geklickten Befehls sein.
+- **Wichtig beim Update:** Sämtliche Dateien dieser Version gemeinsam hochladen (insbesondere `headless.js`, `core.js`, `panel.js`, `panel.html`, `index.html`, `style.css`). Danach **alle offenen Miro-Tabs mit der alten App-Version neu laden**, sonst kann ein bereits laufendes altes Headless-Skript weiter Credits verbrauchen. Die App-URL kann zur Cache-Aktualisierung `https://dbuoperations.github.io/miro-card-manager/index.html?v=1.7.0` lauten.
+- **Kein Versprechen für parallele SDK-Klickaktionen:** Miro-Limits können auch durch andere Apps und gleichzeitige bewusste Befehle erreicht werden. Auf einer Board-Kopie testen; bei erschöpftem Stundenlimit abwarten.
+
+Der Rest dieses Dokuments enthält ältere Versionsnotizen. Frühere Angaben zu Auto Level, periodischen Scans und automatischen Bewegungsereignissen sind **historisch und gelten nicht für 1.7.0**.
 
 **Hotfix 1.6.1 (Ladefehler):** Die Dateiimporte, HTML-Skripte und Panel-URL verwenden nun dieselbe feste Versionskennung, sodass Miro/GitHub Pages nach einem Update keine alte `core.js` mit einer neuen `panel.js` kombinieren soll. Der Panel-Start bleibt auch bei einer älteren Core-Version sichtbar, und fehlgeschlagene Modul-Initialisierung zeigt einen Hinweis statt leerer Menüs. **Alle sieben Dateien aus dem Update-ZIP gemeinsam im Repository ersetzen**, dann das Board hart neu laden. `awards.js`, Styles und Award-Grafiken bleiben unverändert. Falls Miro die alte Headless-Seite weiter zwischenspeichert, in den Miro-Developer-Einstellungen die App-URL auf `https://dbuoperations.github.io/miro-card-manager/index.html?v=1.6.1` setzen und die App erneut öffnen.
 
@@ -60,14 +74,13 @@ Wenn `App URL` fehlt, überprüfe, dass die App als **Web SDK**-App in einem Mir
 
 1. **Zuerst Kopie vom Miro-Board anlegen.** Die App erstellt und gruppiert echte Board-Objekte. Nicht direkt auf dem Live-Board experimentieren.
 2. Die 20 vorhandenen Avatar-Bilder markieren. Nicht vorher alle 20 Bilder zu *einer* Gruppe zusammenfassen.
-3. App öffnen: die Anzeige sollte **20 Karten ausgewählt** zeigen.
+3. App öffnen: die Anzeige zeigt anfangs **–**, da bewusst keine automatische Auswahlprüfung stattfindet. Auf **↻ Prüfen** klicken; dann sollte **20 Karten ausgewählt** angezeigt werden.
 4. Den Regler **Anzahl der Level** auf `6` (oder 2–10) stellen.
 5. **Level-Zahlen hinzufügen** klicken. Erwartet: 20 separate Kartengruppen, jede mit 6 Kreisen unten. Anfangs sind alle Kreise grau.
 6. Eine oder mehrere Kartengruppen markieren, im Bereich 03 **Level 3** wählen und **Level setzen** klicken. Erwartet: Kreis **1, 2, 3 gelb**, Kreis **4, 5, 6 grau**.
 7. Für automatische Level: Im Board ein großes **Rechteck** zeichnen oder einen **Frame** als Level-Zone verwenden. **Genau dieses Feld** markieren. Im App-Bereich 02 **Level 3 → Feld zuweisen** klicken. Andere Felder analog zuweisen.
-8. Kartengruppe mit der **Mitte ihrer Grafik** in das zugewiesene Feld verschieben. Im Bereich 03 **Alle Level prüfen** klicken; die Kreise sollen den Level des Feldes zeigen. Das Feld kann danach an eine andere Position verschoben werden: der App-Code verfolgt seine **Miro-Objekt-ID**, nicht starre x/y-Koordinaten.
-9. Wenn der manuelle Test klappt, den Schalter **Auto Level** einschalten. Miro liefert die Bewegungsereignisse derzeit nur *experimentell*. Falls eine Änderung nicht automatisch kommt, **Alle Level prüfen** verwenden.
-10. Für Awards Kartengruppe(n) wählen, in Bereich 04 auf **+ Award** klicken. Auf der Karte erscheint das Goldsymbol; über **−** wird es wieder entfernt.
+8. Kartengruppe mit der **Mitte ihrer Grafik** in das zugewiesene Feld verschieben, dann **diese Kartengruppe auswählen** und im Bereich 03 **Level der Auswahl prüfen** klicken. Erst der Klick löst den Vergleich aus. Das Feld kann später verschoben werden: Die App liest bei der nächsten manuellen Prüfung die aktuelle Position anhand der **Miro-Objekt-ID**.
+9. Für Awards Kartengruppe(n) wählen, in Bereich 04 auf **+ Award** klicken. Auf der Karte erscheint das Goldsymbol; über **−** wird es wieder entfernt.
 
 ## 4. Verhalten und Grenzen
 
@@ -81,7 +94,7 @@ Wenn `App URL` fehlt, überprüfe, dass die App als **Web SDK**-App in einem Mir
 - Die Anwendung speichert Level pro Avatar als **Miro-Item-Metadaten**, verknüpfte Felder und Einstellungen im **Miro-Board-Storage**. Beim Verschieben der Felder werden keine festen Koordinaten gespeichert.
 - 13 Auszeichnungen stammen aus den beiden bereitgestellten PDF-Dateien. **„SELTENER FUND“** hat in der zweiten PDF keine Grafik und ist daher bewusst nicht enthalten.
 - Avatar-Grafiken sind weiter die bestehenden SVG-Bilder; die App erzeugt keine neuen Avatare. Sie legt native Miro-Kreise und PNG-Awards **über die vorhandene Grafik** und gruppiert sie als Einheit.
-- Das ist eine **Testversion**. Das automatische Event und das Verhalten beim Umgruppieren müssen noch auf dem echten Miro-Board verifiziert werden. Änderungen zuerst auf einer Board-Kopie testen.
+- Das ist eine **Testversion**. Das Verhalten beim Umgruppieren, bei Ebenen und bei gleichzeitigen Nutzern muss noch auf einem echten Miro-Board verifiziert werden. Änderungen zuerst auf einer Board-Kopie testen.
 
 ## 5. Tests für Entwickler
 
@@ -91,7 +104,7 @@ Mit Node.js im entpackten Projektordner:
 npm test
 ```
 
-Die 25 Tests prüfen u. a. 20 Karten / 120 Kreise, Level-Farben, gezielte Bewegungsereignisse, Ebenenreihenfolge, API-Limit-Retry, Awards und Umgruppierung. Das sind **Mock-Tests**, kein Live-Miro-Integrationstest.
+Die 29 Tests prüfen u. a. 20 Karten / 120 Kreise, manuelle Level-Synchronisierung nur für die Auswahl, **keine SDK-Aufrufe beim Panel-Start oder Headless-Bewegungsereignissen**, Ebenenreihenfolge, API-Limit-Retry, Awards und Umgruppierung. Das sind **Mock-Tests**, kein Live-Miro-Integrationstest.
 
 ## 6. Verwendete Plattform-Dokumentation
 

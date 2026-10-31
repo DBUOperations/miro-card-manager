@@ -1,4 +1,4 @@
-import {makeManager} from './core.js?v=1.6.1';
+import {makeManager} from './core.js?v=1.7.0';
 import {AWARDS,awardAssetUrl} from './awards.js';
 
 const $=id=>document.getElementById(id);
@@ -11,10 +11,9 @@ const manager=makeManager(board);
 let levelCount=6;
 let busy=false;
 let toastTimer;
-let selectionDebounce;
 // The panel must still render if a browser temporarily has an older core.js
 // in its cache. Warn instead of stopping execution before the award gallery.
-const coreCompatible=typeof manager.syncChanged==='function';
+const coreCompatible=typeof manager.syncSelectedLevels==='function';
 manager.setStatusHandler?.(message=>{
   if(busy)$('busy-text').textContent=message;
 });
@@ -51,25 +50,6 @@ function preview() {
   $('manual-level').innerHTML=options(previousManual||1,true);
 }
 
-async function refreshSelection() {
-  if(busy) return;
-  try {
-    const data=await manager.selectionInfo();
-    $('selected-count').textContent=String(data.cards);
-    $('zone-count').textContent=`· ${data.zones} Felder`;
-  } catch (e) {console.warn('Selection status',e);}
-}
-
-async function refreshConfig() {
-  const cfg=await manager.getConfig();
-  levelCount=cfg.levelCount;
-  $('level-count').value=String(levelCount);
-  $('auto-level').checked=cfg.auto;
-  $('zone-summary').textContent=`${Object.keys(cfg.zones).length} Felder verknüpft`;
-  preview();
-  await refreshSelection();
-}
-
 async function run(label,fn) {
   if(busy)return;
   busy=true;
@@ -79,6 +59,7 @@ async function run(label,fn) {
   try {
     const result=await fn((done,total)=>{
       $('busy-text').textContent=`${label} ${done}/${total}`;
+      if(Number.isFinite(total))$('selected-count').textContent=String(total);
     });
     return result;
   } catch(e) {
@@ -88,7 +69,6 @@ async function run(label,fn) {
     busy=false;
     $('busy').hidden=true;
     for(const button of document.querySelectorAll('button')) button.disabled=false;
-    await refreshConfig().catch(console.warn);
   }
 }
 
@@ -130,12 +110,18 @@ $('level-count').addEventListener('input',e=>{
   preview();
 });
 
+$('check-selection').addEventListener('click',()=>run('Auswahl prüfen',async()=>{
+  const cards=await manager.selectedCards();
+  $('selected-count').textContent=String(cards.length);
+  toast(`${cards.length} Avatar-Karte(n) ausgewählt.`);
+}));
+
 $('initialize').addEventListener('click',()=>run('Karten vorbereiten',async(progress)=>{
   const selected=await manager.selectedCards();
   if(!selected.length) throw new Error('Bitte Avatar-Karten auswählen.');
   const changing=selected.some(x=>x.meta && x.meta.count!==levelCount);
   if(changing && !window.confirm(`Du änderst die Anzahl der Level auf ${levelCount}. Die bisherigen Level-Kreise der ausgewählten Karten werden ersetzt. Fortfahren?`))return;
-  const res=await manager.initializeSelected(levelCount,progress);
+  const res=await manager.initializeSelected(levelCount,progress,false,selected);
   toast(`${res.updated} Karten vorbereitet · ${res.unchanged} bereits fertig.`);
 }));
 
@@ -143,8 +129,8 @@ $('reset-cards').addEventListener('click',()=>run('Full Reset',async(progress)=>
   const cards=await manager.selectedCards({allowNew:false});
   if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
   if(!window.confirm(`${cards.length} Karte(n) zurücksetzen? Alle Awards werden gelöscht, Level wird 0 und die Karte erhält ${levelCount} graue Kreise. Die Avatarbilder bleiben erhalten.`))return;
-  const res=await manager.resetSelected(levelCount,progress);
-  toast(`${res.reset} Karten zurückgesetzt · Level 0 · ${res.count} graue Kreise. Auto Level pausiert zwei Minuten.`);
+  const res=await manager.resetSelected(levelCount,progress,cards);
+  toast(`${res.reset} Karten zurückgesetzt · Level 0 · ${res.count} graue Kreise.`);
 }));
 
 $('grid-cards').addEventListener('click',()=>run('Grid anordnen',async(progress)=>{
@@ -164,11 +150,13 @@ $('fix-layers').addEventListener('click',()=>run('Karten-Ebenen korrigieren',asy
 
 $('assign-zone').addEventListener('click',()=>run('Feld verbinden',async()=>{
   const zone=await manager.assignSelectedZone($('zone-level').value);
+  $('zone-summary').textContent=`Level ${zone.level} zugewiesen`;
   toast(`Feld mit Level ${zone.level} verbunden.`);
 }));
 
 $('remove-zone').addEventListener('click',()=>run('Feld lösen',async()=>{
   const changed=await manager.unassignSelectedZone();
+  if(changed)$('zone-summary').textContent='Zuweisung entfernt';
   toast(changed?'Level-Zuweisung entfernt.':'Dieses Feld war nicht zugewiesen.');
 }));
 
@@ -177,8 +165,8 @@ $('set-level').addEventListener('click',()=>run('Level setzen',async(progress)=>
   toast(`${res.updated} von ${res.total} Karten aktualisiert.`);
 }));
 
-$('sync-levels').addEventListener('click',()=>run('Level abgleichen',async(progress)=>{
-  const res=await manager.syncLevels(progress);
+$('sync-levels').addEventListener('click',()=>run('Auswahl-Level abgleichen',async(progress)=>{
+  const res=await manager.syncSelectedLevels(progress);
   toast(`${res.updated} von ${res.total} Karten aktualisiert · ${res.zones} Level-Felder erkannt.`);
 }));
 
@@ -187,26 +175,7 @@ $('rearrange-awards').addEventListener('click',()=>run('Awards anordnen',async(p
   toast(`${res.updated} von ${res.total} Karten vertikal angeordnet.`);
 }));
 
-$('auto-level').addEventListener('change',async(e)=>{
-  if(busy)return;
-  try {
-    await manager.putConfig({auto:e.target.checked});
-    if(e.target.checked) {
-      toast('Auto Level aktiviert. Karten werden bei Bewegung geprüft; Sicherheitsabgleich alle zwei Minuten.');
-      // One intentional initial scan; the background does not repeat this
-      // every 15 seconds anymore.
-      await run('Einmaliger Level-Abgleich',progress=>manager.syncLevels(progress,true));
-    } else toast('Auto Level ausgeschaltet.');
-  } catch(err) {toast(err.message,true);e.target.checked=!e.target.checked;}
-});
-
-board.ui.on('selection:update',()=>{
-  clearTimeout(selectionDebounce);
-  selectionDebounce=setTimeout(refreshSelection,400);
-});
-
 preview();
 awardGallery();
 window.__dbuPanelReady=true;
 if(!coreCompatible)toast('Miro hat alte App-Dateien geladen. Bitte Board mit Strg+Shift+R neu laden.',true);
-refreshConfig().catch(e=>toast(e.message,true));

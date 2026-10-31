@@ -20,7 +20,7 @@ export function makeManager(board, options={}) {
   let statusHandler=()=>{};
   const sleep=options.sleep || (ms=>new Promise(resolve=>setTimeout(resolve,ms)));
   const creditHistory=[];
-  // Leave some SDK capacity for the rest of Miro and the headless iframe.
+  // Local per-panel budget. Zero SDK calls happen without a deliberate command.
   const CREDIT_MINUTE=options.creditMinute??85000;
   const CREDIT_HOUR=options.creditHour??850000;
   const isRateLimit=err=>/rate.?limit|too many requests|credits? (?:per|limit|exceeded)|429/i.test(String(err?.message||err));
@@ -58,15 +58,12 @@ export function makeManager(board, options={}) {
   const getMembers=group=>sdkCall(()=>group.getItems());
   const removeItem=item=>sdkCall(()=>board.remove(item));
   const getLayerIndex=item=>sdkCall(()=>board.getLayerIndex(item));
-  let mutationDepth=0;
 
   async function getConfig() {
     const saved = await collection.get(CONFIG_KEY) || {};
     return {
       levelCount: clamp(Number(saved.levelCount) || 6, 2, 10),
       zones: saved.zones && typeof saved.zones === 'object' ? {...saved.zones} : {},
-      auto: !!saved.auto,
-      pauseUntil: Number(saved.pauseUntil) || 0,
     };
   }
 
@@ -76,17 +73,9 @@ export function makeManager(board, options={}) {
     return next;
   }
 
-  async function withMutation(action, pauseAfterMs=0) {
-    // Keep an existing post-reset cooldown when another action starts before
-    // it expires (for example Reset immediately followed by Grid).
-    const previousPause=(await getConfig()).pauseUntil;
-    mutationDepth++;
-    await putConfig({pauseUntil: Date.now() + 10 * 60_000});
-    try { return await action(); }
-    finally {
-      try {await putConfig({pauseUntil: Math.max(previousPause, pauseAfterMs ? Date.now()+pauseAfterMs : 0)});}
-      finally {mutationDepth--;}
-    }
+  async function withMutation(action) {
+    // Manual-only mode does not require SDK storage reads/writes for pauses.
+    return action();
   }
 
   async function readCard(image) {
@@ -122,23 +111,6 @@ export function makeManager(board, options={}) {
     return cardsFromItems(await getSelection(),allowNew);
   }
 
-  async function allCards() {
-    const [images,groups]=await Promise.all([
-      sdkCall(()=>board.get({type:'image'}),500),
-      sdkCall(()=>board.get({type:'group'}),500),
-    ]);
-    const candidates = [...images];
-    for (const group of groups) {
-      for (const item of await getMembers(group)) if (item.type === 'image') candidates.push(item);
-    }
-    const results = [];
-    for (const img of uniqueById(candidates)) {
-      const card = await resolveImage(img, false);
-      if (card) results.push(card);
-    }
-    return results;
-  }
-
   async function selectionInfo() {
     const items = await getSelection();
     return {
@@ -150,10 +122,12 @@ export function makeManager(board, options={}) {
 
   async function cardsFromItems(items,allowNew=false) {
     const found=[];
+    const seen=new Set();
     for(const item of items) {
       const members=item.type==='group' && item.getItems ? await getMembers(item) : [item];
       for(const member of members) {
-        if(member.type==='image' && !String(member.title||'').startsWith('Award: ')) {
+        if(member.type==='image' && !seen.has(member.id) && !String(member.title||'').startsWith('Award: ')) {
+          seen.add(member.id);
           const card=await resolveImage(member,allowNew);
           if(card)found.push(card);
         }
@@ -285,6 +259,16 @@ export function makeManager(board, options={}) {
     return sdkCall(()=>board.group({items}));
   }
 
+  async function placeOwnOverlays(image,meta,members) {
+    if(!board.bringInFrontOf)return;
+    const index=new Map(members.map(item=>[item.id,item]));
+    const ownImage=index.get(image.id)||image;
+    const circles=(meta.badgeIds||[]).map(id=>index.get(id)).filter(Boolean);
+    if(circles.length)await sdkCall(()=>board.bringInFrontOf(circles,ownImage));
+    const awards=(meta.awards||[]).map(a=>index.get(a.itemId)).filter(Boolean);
+    if(awards.length)await sdkCall(()=>board.bringInFrontOf(awards,circles.at(-1)||ownImage));
+  }
+
   async function withReleasedCard(image, action) {
     const originalMembers = await releaseCardGroup(image);
     try {
@@ -316,8 +300,8 @@ export function makeManager(board, options={}) {
     }
   }
 
-  async function initializeSelected(count, progress=()=>{}, repair=false) {
-    const cards = await selectedCards({allowNew:!repair});
+  async function initializeSelected(count, progress=()=>{}, repair=false, providedCards=null) {
+    const cards = providedCards || await selectedCards({allowNew:!repair});
     if (!cards.length) throw new Error('Bitte zuerst eine oder mehrere Avatar-Karten auswählen.');
     count = clamp(Number(count) || 6, 2, 10);
     return withMutation(async () => {
@@ -369,12 +353,15 @@ export function makeManager(board, options={}) {
               for (const badge of await getItemsByIds([...stale])) await removeItem(badge);
               members = members.filter(x=>!stale.has(x.id));
             }
-            const group=await regroup([...members, ...await getItemsByIds(badges)]);
+            const readyMembers=[...members,...await getItemsByIds(badges)];
+            const group=await regroup(readyMembers);
             if(group)selectedGroupIds.push(group.id);
-            await setMetadata(currentImage,CARD_KEY, {
+            const nextMeta={
               version:1, level, count:cardCount, badgeIds:badges,
               awards:Array.isArray(meta?.awards) ? meta.awards : [],
-            });
+            };
+            await setMetadata(currentImage,CARD_KEY,nextMeta);
+            await placeOwnOverlays(currentImage,nextMeta,readyMembers);
           } catch(error) {
             // If still ungrouped, discard only our new circles before the recovery group.
             const live = await getItemsByIds(badges);
@@ -390,7 +377,6 @@ export function makeManager(board, options={}) {
         else await perform([image]);
         updated++;
       }
-      if(updated) await normalizeLayers(cards.map(x=>x.image));
       await restoreCardSelection(selectedGroupIds);
       progress(cards.length, cards.length);
       return {updated, unchanged, total:cards.length};
@@ -401,8 +387,8 @@ export function makeManager(board, options={}) {
     return checkAndRepairSelected(progress);
   }
 
-  async function resetSelected(count,progress=()=>{}) {
-    const cards=await selectedCards({allowNew:false});
+  async function resetSelected(count,progress=()=>{},providedCards=null) {
+    const cards=providedCards || await selectedCards({allowNew:false});
     if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
     count=clamp(Number(count)||6,2,10);
     // Preflight every card before changing any board object.
@@ -422,8 +408,11 @@ export function makeManager(board, options={}) {
           const group=await withReleasedCard(image,async()=>{
             const current=await getById(image.id);
             const newBadges=await getItemsByIds(badgeIds);
-            const created=await regroup([current,...newBadges]);
-            await setMetadata(current,CARD_KEY,{version:1,level:0,count,badgeIds,awards:[]});
+            const readyMembers=[current,...newBadges];
+            const created=await regroup(readyMembers);
+            const nextMeta={version:1,level:0,count,badgeIds,awards:[]};
+            await setMetadata(current,CARD_KEY,nextMeta);
+            await placeOwnOverlays(current,nextMeta,readyMembers);
             committed=true;
             return created;
           });
@@ -448,10 +437,9 @@ export function makeManager(board, options={}) {
         }
         progress(reset,cards.length);
       }
-      await normalizeLayers(cards.map(x=>x.image),()=>{},'relative');
       await restoreCardSelection(groupIds);
       return {reset,total:cards.length,count};
-    },2*60_000);
+    });
   }
 
   async function arrangeSelectedGrid(columns=4,progress=()=>{}) {
@@ -515,7 +503,6 @@ export function makeManager(board, options={}) {
         moved++;
         progress(i+1,ordered.length);
       }
-      await normalizeLayers(ordered.map(x=>x.image));
       await restoreCardSelection(groupIds);
       return {moved,total:ordered.length,columns};
     });
@@ -656,8 +643,11 @@ export function makeManager(board, options={}) {
                 awards.push({id:previous.id,itemId:icon.id});
               }
               const allIcons=await getItemsByIds(awards.map(a=>a.itemId));
-              const group=await regroup([current,...await getItemsByIds(badgeIds),...allIcons]);
-              await setMetadata(current,CARD_KEY,{version:1,count:audit.count,level:clamp(Number(meta.level)||0,0,audit.count),badgeIds,awards});
+              const readyMembers=[current,...await getItemsByIds(badgeIds),...allIcons];
+              const group=await regroup(readyMembers);
+              const nextMeta={version:1,count:audit.count,level:clamp(Number(meta.level)||0,0,audit.count),badgeIds,awards};
+              await setMetadata(current,CARD_KEY,nextMeta);
+              await placeOwnOverlays(current,nextMeta,readyMembers);
               committed=true;
               return group;
             } catch(error) {
@@ -685,7 +675,6 @@ export function makeManager(board, options={}) {
         }
         progress(i+1,cards.length);
       }
-      if(updated)await normalizeLayers(cards.map(x=>x.image),()=>{},'relative');
       await restoreCardSelection(groupIds);
       return {updated,healthy,total:cards.length,awardsRepaired};
     });
@@ -792,47 +781,20 @@ export function makeManager(board, options={}) {
     return matches[0].level;
   }
 
-  async function syncLevels(progress=()=>{}, respectAuto=false) {
-    const cfg=await getConfig();
-    if(respectAuto && (!cfg.auto || mutationDepth || Date.now()<cfg.pauseUntil)) return {skipped:true};
-    const zones=await loadZones(cfg);
-    const cards=await allCards();
-    let updated=0;
-    for(let i=0;i<cards.length;i++) {
-      const target=await detectedLevel(cards[i].image,zones);
-      if(target!==null && await setLevel(cards[i].image,target)) updated++;
-      progress(i+1,cards.length);
-    }
-    return {updated,total:cards.length,zones:zones.length};
-  }
-
-  async function syncChanged(changedItems=[],progress=()=>{},respectAuto=true) {
-    const cfg=await getConfig();
-    if(respectAuto && (!cfg.auto || mutationDepth || Date.now()<cfg.pauseUntil))return {skipped:true};
-    const changed=uniqueById(changedItems.filter(x=>x?.id));
-    if(!changed.length)return {skipped:true};
-    if(changed.some(x=>Object.hasOwn(cfg.zones,x.id))) {
-      // Resized/moved level zone affects potentially every avatar inside it.
-      return syncLevels(progress,respectAuto);
-    }
-    const probable=changed.filter(x=>x.type==='group' || (x.type==='image' &&
-      !String(x.title||'').startsWith('Award: ')));
-    if(!probable.length)return {skipped:true};
-    const live=[];
-    for(const item of probable) {
-      try {live.push(await getById(item.id));}
-      catch(err) {if(isRateLimit(err))throw err; /* item may have been removed */}
-    }
-    const cards=await cardsFromItems(live,false);
-    if(!cards.length)return {skipped:true};
-    const zones=await loadZones(cfg);
-    let updated=0;
-    for(let i=0;i<cards.length;i++) {
-      const target=await detectedLevel(cards[i].image,zones);
-      if(target!==null && await setLevel(cards[i].image,target))updated++;
-      progress(i+1,cards.length);
-    }
-    return {updated,total:cards.length,zones:zones.length};
+  async function syncSelectedLevels(progress=()=>{}) {
+    // Explicit command: never scan the entire board; inspect selected cards.
+    const cards=await selectedCards({allowNew:false});
+    if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
+    const zones=await loadZones(await getConfig());
+    return withMutation(async()=>{
+      let updated=0;
+      for(let i=0;i<cards.length;i++) {
+        const target=await detectedLevel(cards[i].image,zones);
+        if(target!==null && await setLevel(cards[i].image,target))updated++;
+        progress(i+1,cards.length);
+      }
+      return {updated,total:cards.length,zones:zones.length};
+    });
   }
 
   async function awardPosition(image, slot, anchor) {
@@ -903,7 +865,9 @@ export function makeManager(board, options={}) {
           members=members.filter(x=>x.id!==existing.itemId);
         }
         const group=await regroup(members);
-        await setMetadata(currentImage,CARD_KEY,{...meta,awards});
+        const nextMeta={...meta,awards};
+        await setMetadata(currentImage,CARD_KEY,nextMeta);
+        await placeOwnOverlays(currentImage,nextMeta,members);
         return group?.id || currentImage.groupId || null;
       } catch(error) {
         if(addedIcon) {
@@ -931,14 +895,15 @@ export function makeManager(board, options={}) {
           const group=await withReleasedCard(image,async members=>{
             const currentImage=await liveImage(image,members);
             await reflowAwardPositions(currentImage,meta.awards,anchor);
-            return regroup(members);
+            const group=await regroup(members);
+            await placeOwnOverlays(currentImage,meta,members);
+            return group;
           });
           if(group)selectedGroupIds.push(group.id);
           updated++;
         } else if(image.groupId) selectedGroupIds.push(image.groupId);
         progress(i+1,cards.length);
       }
-      if(updated)await normalizeLayers(cards.map(x=>x.image),()=>{},'relative');
       await restoreCardSelection(selectedGroupIds);
       return {updated,total:cards.length};
     });
@@ -957,16 +922,15 @@ export function makeManager(board, options={}) {
         selectedGroupIds.push(updatedGroup || cards[i].image.groupId);
         progress(i+1,cards.length);
       }
-      if(changed)await normalizeLayers(cards.map(x=>x.image),()=>{},'relative');
       await restoreCardSelection(selectedGroupIds);
       return {changed,total:cards.length};
     });
   }
 
   return {
-    getConfig,putConfig,selectionInfo,selectedCards,allCards,initializeSelected,repairSelected,
+    getConfig,putConfig,selectionInfo,selectedCards,initializeSelected,repairSelected,
     resetSelected,arrangeSelectedGrid,layersSelected,checkAndRepairSelected,
-    setSelectedLevel,assignSelectedZone,unassignSelectedZone,syncLevels,syncChanged,changeAward,rearrangeSelectedAwards,
+    setSelectedLevel,assignSelectedZone,unassignSelectedZone,syncSelectedLevels,changeAward,rearrangeSelectedAwards,
     setStatusHandler:fn=>{statusHandler=typeof fn==='function'?fn:()=>{};},
   };
 }

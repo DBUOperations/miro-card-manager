@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Caboledo Card Manager</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=1.7.0">
 </head>
 <body>
   <main class="app">
@@ -12,7 +12,7 @@
       <div class="eyebrow">DEIN BILDUNGSURLAUB</div>
       <h1>CARD <span>MANAGER</span></h1>
       <p>Level &amp; Awards direkt auf Deinem Miro-Board.</p>
-      <div class="selection" id="selection"><b id="selected-count">0</b> Karten ausgewählt <span id="zone-count">· 0 Felder</span></div>
+      <div class="selection" id="selection"><b id="selected-count">–</b> Karten ausgewählt <button id="check-selection" class="selection-check" title="Auswahl nur jetzt prüfen (Miro API)">↻ Prüfen</button></div>
       <div class="quick-tools" aria-label="Kartenwerkzeuge">
         <button id="reset-cards" class="tool-button" title="Ausgewählte Karten: alle Awards entfernen, Level 0 und aktuelle Kreisanzahl">↺ Reset</button>
         <button id="grid-cards" class="tool-button" title="Ausgewählte Karten als Raster mit vier Spalten anordnen">▦ Grid</button>
@@ -39,7 +39,7 @@
       </div>
       <div class="row compact">
         <button id="remove-zone" class="button ghost">Zuweisung entfernen</button>
-        <span id="zone-summary" class="hint">0 Felder verknüpft</span>
+        <span id="zone-summary" class="hint">Nur bei Aktion geprüft</span>
       </div>
     </section>
 
@@ -49,11 +49,8 @@
         <select id="manual-level" aria-label="Level für ausgewählte Karten"></select>
         <button id="set-level" class="button secondary">Level setzen</button>
       </div>
-      <label class="toggle-row">
-        <input id="auto-level" type="checkbox">
-        <span><b>Auto Level</b><small>Beim Verschieben prüfen (experimentell)</small></span>
-      </label>
-      <button id="sync-levels" class="button outline">↻ Alle Level prüfen</button>
+      <p class="hint">Manueller Modus: Keine Hintergrundabfragen bei Bewegungen oder Auswahl.</p>
+      <button id="sync-levels" class="button outline">↻ Level der Auswahl prüfen</button>
     </section>
 
     <section class="section">
@@ -63,7 +60,7 @@
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.6.1</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.7 · Manual Only</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
@@ -77,6 +74,6 @@
       message.className='message visible error';
     },8000);
   </script>
-  <script type="module" src="./panel.js?v=1.6.1"></script>
+  <script type="module" src="./panel.js?v=1.7.0"></script>
 </body>
 </html>
