@@ -3,31 +3,37 @@ import {makeManager} from './core.js';
 const board=window.miro?.board;
 if(board?.ui) {
   const manager=makeManager(board);
-  board.ui.on('icon:click', async () => {
-    await board.ui.openPanel({url:'panel.html'});
-  });
+  board.ui.on('icon:click',async()=>board.ui.openPanel({url:'panel.html'}));
 
-  let debounce=null, busy=false;
-  function schedule() {
-    clearTimeout(debounce);
-    debounce=setTimeout(async()=>{
-      if(busy) {schedule();return;}
-      busy=true;
-      try {
-        await manager.syncLevels(()=>{},true);
-      } catch(err) {
-        // The experimental event can be missed/rejected; Sync Levels in the panel is the fallback.
-        console.warn('DBU Auto Level: manual Sync Levels may be needed',err);
-      } finally {busy=false;}
-    },1500);
+  // Miro update events do not cost SDK credits. Inspect only moved cards;
+  // keep a rare full scan in case the experimental event was missed.
+  const pending=new Map();
+  let timer=null,busy=false,fullPending=false;
+  function schedule(items=[],full=false) {
+    if(full)fullPending=true;
+    for(const item of items)if(item?.id)pending.set(item.id,item);
+    clearTimeout(timer);
+    timer=setTimeout(flush,1500);
   }
-  board.ui.on('experimental:items:update',schedule);
-  // Miro's experimental item-update event isn't guaranteed on every drag.
-  // Selection changes offer another chance to detect a completed move.
-  board.ui.on('selection:update',schedule);
-  // Event-independent safety net; syncLevels itself skips work if Auto Level
-  // is disabled or the panel is currently editing board items.
-  setInterval(schedule,15000);
-  // Also synchronize on board load to catch movements missed between sessions.
-  setTimeout(schedule,3000);
+  async function flush() {
+    if(busy) {timer=setTimeout(flush,2500);return;}
+    if(!fullPending && !pending.size)return;
+    busy=true;
+    const full=fullPending,items=[...pending.values()];
+    fullPending=false;pending.clear();
+    try {
+      if(full)await manager.syncLevels(()=>{},true);
+      else await manager.syncChanged(items,()=>{},true);
+    } catch(err) {
+      console.warn('DBU Card Manager Auto Level',err);
+      // The next fallback scan catches interrupted or missed operations.
+    } finally {
+      busy=false;
+      if(fullPending||pending.size)schedule();
+    }
+  }
+  board.ui.on('experimental:items:update',event=>schedule(event?.items||[]));
+  // Do not scan the whole board after selections or every 15 seconds.
+  setInterval(()=>schedule([],true),120000);
+  setTimeout(()=>schedule([],true),3000);
 }

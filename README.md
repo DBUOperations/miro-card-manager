@@ -1,4 +1,13 @@
-# Caboledo / DBU – Miro Card Manager (Testversion 1.5)
+# Caboledo / DBU – Miro Card Manager (Testversion 1.6)
+
+**Neu in 1.6 – weniger SDK-Verbrauch und stabilere Ebenen:**
+
+- **Auto Level bei Bewegung:** Das experimentelle `items:update`-Event prüft vorrangig nur die verschobenen Kartengruppen/Avatare. Wird ein verknüpftes Level-Feld bewegt oder skaliert, werden alle Karten abgeglichen. Der bisherige 15-Sekunden-Vollscan und der Scan bei jeder Auswahl entfallen. Ein Sicherheitsabgleich findet höchstens alle **120 Sekunden** statt, solange Auto Level aktiv und nicht pausiert ist.
+- **SDK-Limits:** API-Aufrufe werden über ein lokales Kreditbudget gedrosselt. Bei einem vorübergehenden Miro-Limit wird der **einzelne fehlgeschlagene SDK-Schritt** nach einer Pause erneut versucht (bis zu drei Wiederholungen), damit größere Aktionen nicht sofort mittendrin abbrechen. Das Panel zeigt währenddessen eine Warteinformation an. Ein stündliches Limit kann dennoch einen späteren manuellen Neustart nötig machen.
+- **Automatische Ebenen:** Bei neuer Initialisierung oder nach Grid werden die ausgewählten Karten mit Kreis- und Award-Ebenen als zusammenhängende Stapel nach vorne gesetzt. Bei Updates einzelner Karten (Award, Reset, Repair) werden Kreise und Awards **relativ zur zugehörigen Avatar-Grafik** einsortiert, statt eine hintere Karte vor alle anderen Karten zu schieben. **Layers** sortiert die ausgewählten Karten nach ihrer aktuellen Avatar-Ebene und holt die kompletten Karteneinheiten bewusst nach vorne.
+- **25 automatisierte Tests**, einschließlich gezielter Auto-Level-Ereignisse, Stapelreihenfolge und Wiederholung nach API-Limit.
+
+**Achtung:** Das experimentelle Miro-Bewegungsereignis sowie `bringInFrontOf()` müssen noch auf einer **Kopie des echten Boards** überprüft werden. Die Anwendung kann Gruppierungen und Ebenen ändern. Nach Hochladen von v1.6 das Board neu laden.
 
 **Neu in 1.5:** Vier kleine Schaltflächen in einer Zeile direkt unter der Kartenauswahl:
 
@@ -7,13 +16,13 @@
 - **Repair:** Überprüft jede ausgewählte Karte auf Gruppierung, Anzahl, Farbe und Position ihrer Kreise sowie die Zugehörigkeit und Position ihrer Awards. Intakte Karten werden nicht verändert; beschädigte Komponenten werden soweit möglich wiederhergestellt, ohne Level und Awards zurückzusetzen. Bei Fremdgruppen wird die Reparatur sicherheitshalber abgebrochen.
 - **Layers:** Holt ausgewählte Avatare einschließlich ihrer Kreise und Awards in der korrekten Reihenfolge nach vorne. Damit können die Kreise einer verdeckten Karte nicht mehr über einer anderen Karte erscheinen, wenn die obere Karte danach mit diesem Werkzeug nach vorne gesetzt wird.
 
-**Wichtig:** 22 automatisierte Mock-Tests sind erfolgreich; das Verhalten des echten Miro Web SDK (insbesondere Gruppieren, Verschieben und Ebenen) muss auf einer **Board-Kopie** getestet werden. Die Schaltflächen verändern echte Miro-Objekte. Nach der Aktualisierung die App bzw. das Miro-Board neu laden.
+**Wichtig:** Die Tests verwenden Miro-SDK-Mocks. Das echte Miro-Verhalten (insbesondere Gruppieren, Bewegen und Ebenen) muss weiterhin auf einer **Board-Kopie** getestet werden.
 
 **Hotfix 1.4:** Beim Hinzufügen oder Entfernen eines Awards sowie bei einer Änderung der Level-Kreisanzahl werden bereits vorhandene Award-Bilder nicht mehr synchronisiert oder verschoben. Das verhindert einen Miro-SDK-Fehler, der auch in v1.3 auftreten konnte, wenn eine Award-Grafik Kind eines Frames ist. Nur die explizite Funktion zur Award-Neuanordnung ändert Award-Koordinaten und löst zuvor bestehende Frame-Kindbeziehungen. Die Reparaturfunktion sammelt nach einer fehlgeschlagenen Gruppierung verwaiste Awards wieder ein und fügt sie zusammen mit den korrigierten Kreisen erneut zur Kartengruppe hinzu. Nach dem Entfernen eines mittleren Awards kann bis zu einer expliziten Neuanordnung eine Lücke sichtbar bleiben.
 
 **Hotfix 1.3:** Awards, die durch ein Miro-Frame als Kinder geführt werden, werden beim Neuordnen korrekt in Frame-Koordinaten bewegt. Wenn eine Karte in ein anderes Level-Frame verschoben wurde, wird das Award zuerst vom alten Frame gelöst, damit es an die neue Position verschoben werden darf. Bei einem SDK-Fehler wird die Kartengruppe soweit möglich automatisch wiederhergestellt. Neu erzeugte Icons und Kreise werden bei einem Fehler bereinigt. Das Verhalten wurde mit Mock-Tests, nicht auf einem echten Miro-Board, geprüft.
 
-**Hotfix 1.2:** Die Position wird **vor dem Entgruppieren** gespeichert, denn Miro kann bei einer Gruppe/Frame die Koordinatenreferenz beim Entgruppieren ändern. Für die Level-Prüfung wird weiterhin dieselbe absolute Position verwendet. Auto Level wird zusätzlich bei einer geänderten Auswahl und mindestens alle 15 Sekunden geprüft, falls das experimentelle Move-Event ausbleibt. Ungültige Koordinaten stoppen die Aktion.
+**Hotfix 1.2 (historisch):** Die Position wird **vor dem Entgruppieren** gespeichert, denn Miro kann bei einer Gruppe/Frame die Koordinatenreferenz beim Entgruppieren ändern. Für die Level-Prüfung wird weiterhin dieselbe absolute Position verwendet. Das frühere Auto-Level-Polling wurde in 1.6 durch gezielte Events und einen 120-Sekunden-Fallback ersetzt. Ungültige Koordinaten stoppen die Aktion.
 
 **Änderungen in v1.1:** Das Panel hat einen eigenen vertikalen Scrollbereich. Awards werden zuerst von oben nach unten angeordnet (sechs je Spalte, danach nächste Spalte). Beim Ändern der Level-Anzahl wird die aktuelle Kartenposition nach dem Aufheben der Gruppierung neu ausgelesen. Die Funktion **Repair** kann jetzt verrutschte Kreise prüfen und korrigieren. Unter „Awards vergeben“ setzt **Vorhandene Awards vertikal anordnen** bereits vergebene Awards in das neue Layout.
 
@@ -80,7 +89,7 @@ Mit Node.js im entpackten Projektordner:
 npm test
 ```
 
-Die Tests prüfen u. a. 20 Karten / 120 Kreise, Level-Farben, bewegte Level-Felder, Idempotenz, Awards und Umgruppierung. Das sind **Mock-Tests**, kein Live-Miro-Integrationstest.
+Die 25 Tests prüfen u. a. 20 Karten / 120 Kreise, Level-Farben, gezielte Bewegungsereignisse, Ebenenreihenfolge, API-Limit-Retry, Awards und Umgruppierung. Das sind **Mock-Tests**, kein Live-Miro-Integrationstest.
 
 ## 6. Verwendete Plattform-Dokumentation
 

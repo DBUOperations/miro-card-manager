@@ -8,6 +8,9 @@ if(!board) {
   throw new Error('Miro Web SDK unavailable');
 }
 const manager=makeManager(board);
+manager.setStatusHandler(message=>{
+  if(busy)$('busy-text').textContent=message;
+});
 let levelCount=6;
 let busy=false;
 let toastTimer;
@@ -185,7 +188,12 @@ $('auto-level').addEventListener('change',async(e)=>{
   if(busy)return;
   try {
     await manager.putConfig({auto:e.target.checked});
-    toast(e.target.checked?'Auto Level aktiviert. Bei Änderungen wird automatisch geprüft.':'Auto Level ausgeschaltet.');
+    if(e.target.checked) {
+      toast('Auto Level aktiviert. Karten werden bei Bewegung geprüft; Sicherheitsabgleich alle zwei Minuten.');
+      // One intentional initial scan; the background does not repeat this
+      // every 15 seconds anymore.
+      await run('Einmaliger Level-Abgleich',progress=>manager.syncLevels(progress,true));
+    } else toast('Auto Level ausgeschaltet.');
   } catch(err) {toast(err.message,true);e.target.checked=!e.target.checked;}
 });
 
