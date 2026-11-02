@@ -1,4 +1,4 @@
-import {makeManager} from './core.js?v=1.9.1';
+import {makeManager} from './core.js?v=1.9.2';
 import {AWARDS,awardAssetUrl} from './awards.js';
 
 const $=id=>document.getElementById(id);
@@ -13,7 +13,7 @@ let busy=false;
 let toastTimer;
 // The panel must still render if a browser temporarily has an older core.js
 // in its cache. Warn instead of stopping execution before the award gallery.
-const coreCompatible=manager.version==='1.9.1';
+const coreCompatible=manager.version==='1.9.2';
 manager.setStatusHandler?.(message=>{
   if(busy)$('busy-text').textContent=message;
 });
@@ -57,6 +57,17 @@ function preview() {
     }));
     buttons.append(button);
   }
+  const clear=document.createElement('button');
+  clear.id='reset-levels';
+  clear.className='level-button level-reset';
+  clear.textContent='↺';
+  clear.title='Level zurücksetzen: Alle Zahlen grau, Awards bleiben erhalten';
+  clear.setAttribute('aria-label','Alle ausgewählten Karten auf Level 0 zurücksetzen');
+  clear.addEventListener('click',()=>run('Level zurücksetzen',async(progress)=>{
+    const res=await manager.resetSelectedLevels(progress);
+    toast(`${res.updated} von ${res.total} Karten auf Level 0 gesetzt · alle Zahlen grau.`);
+  }));
+  buttons.append(clear);
 }
 
 async function run(label,fn) {
@@ -163,6 +174,14 @@ $('fix-layers').addEventListener('click',()=>run('Karten-Ebenen korrigieren',asy
 $('rearrange-awards').addEventListener('click',()=>run('Awards anordnen',async(progress)=>{
   const res=await manager.rearrangeSelectedAwards(progress);
   toast(`${res.updated} von ${res.total} Karten vertikal angeordnet.`);
+}));
+
+$('reset-awards').addEventListener('click',()=>run('Awards entfernen',async(progress)=>{
+  const cards=await manager.selectedCards({allowNew:true});
+  if(!cards.length)throw new Error('Bitte Avatar-Karten auswählen.');
+  if(!window.confirm(`Alle Awards von ${cards.length} ausgewählten Karte(n) entfernen? Die Level-Zahlen bleiben erhalten.`))return;
+  const res=await manager.resetSelectedAwards(progress);
+  toast(`${res.removed} Awards von ${res.updated} Karten entfernt · Level bleiben erhalten.`);
 }));
 
 preview();

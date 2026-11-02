@@ -873,6 +873,108 @@ export function makeManager(board, options={}) {
     });
   }
 
+  // Level 0 is deliberately not offered as a numbered level. This explicit
+  // command restores ALL existing indicators to gray without deleting them
+  // or touching the card's award images.
+  async function resetSelectedLevels(progress=()=>{}) {
+    const cards=await selectedCards({allowNew:true});
+    if(!cards.length)throw new Error('Bitte Avatar-Karten auswählen.');
+    const states=[];
+    for(const card of cards)states.push(await inspectCard(await getById(card.image.id)));
+    return withMutation(async()=>{
+      let updated=0;
+      const selectedIds=[];
+      for(let i=0;i<states.length;i++) {
+        const state=states[i],image=state.image;
+        if(!state.meta && !state.badges.length) {
+          if(image.groupId)selectedIds.push(image.groupId);
+          progress(i+1,states.length);
+          continue; // A brand-new avatar has nothing to reset.
+        }
+        if(!state.healthy) {
+          // Copied/Cut-Pasted cards can contain inherited item IDs. Normalize
+          // only their circles; do NOT resurrect deleted award icons.
+          const result=await rebuildCard(image,state,state.count,0,false);
+          selectedIds.push(result.group?.id||image.id);
+          updated++;
+        } else {
+          let changed=Number(state.meta.level)!==0;
+          for(const badge of state.badges) {
+            const live=await getById(badge.item.id);
+            const gray=levelStyle(badge.index,0,live.width,live.height);
+            if(live.style.fillColor!==gray.fillColor || live.style.color!==gray.color) {
+              live.style.fillColor=gray.fillColor;
+              live.style.color=gray.color;
+              await syncItem(live);
+              changed=true;
+            }
+          }
+          if(Number(state.meta.level)!==0) {
+            await setMetadata(await getById(image.id),CARD_KEY,{...state.meta,level:0});
+          }
+          if(changed)updated++;
+          if(image.groupId)selectedIds.push(image.groupId);
+        }
+        progress(i+1,states.length);
+      }
+      await restoreCardSelection(selectedIds);
+      return {updated,total:states.length};
+    });
+  }
+
+  // Remove only the awards physically belonging to the selected avatars.
+  // Inherited metadata IDs on copied cards are NEVER used as delete targets.
+  async function resetSelectedAwards(progress=()=>{}) {
+    const cards=await selectedCards({allowNew:true});
+    if(!cards.length)throw new Error('Bitte Avatar-Karten auswählen.');
+    const states=[];
+    for(const card of cards) {
+      const state=await inspectCard(await getById(card.image.id));
+      await requireCanvasItems(state.members,'Awards Reset');
+      states.push(state);
+    }
+    await attachNearbyOrphans(states);
+    return withMutation(async()=>{
+      let updated=0,removed=0;
+      const selectedIds=[];
+      for(let i=0;i<states.length;i++) {
+        const state=states[i],image=state.image;
+        if(!state.awards.length && !(state.meta?.awards||[]).length) {
+          if(image.groupId)selectedIds.push(image.groupId);
+          progress(i+1,states.length);
+          continue;
+        }
+        const deletedIds=new Set(state.awards.map(a=>a.item.id));
+        const newId=await withReleasedCard(image,async members=>{
+          const live=await liveImage(image,members);
+          for(const award of state.awards) {
+            const [icon]=await getItemsByIds([award.item.id]);
+            if(icon && !icon.groupId) {
+              await removeItem(icon);
+              removed++;
+            }
+          }
+          const survivors=members.filter(item=>!deletedIds.has(item.id));
+          const group=await regroup(survivors);
+          // Rebind badge IDs to this exact card, not to a copied source.
+          const badgeIds=Array.from({length:state.count},(_,slot)=>
+            state.badges.find(b=>b.index===slot+1)?.item.id).filter(Boolean);
+          const nextMeta=(state.meta || state.badges.length) ? {
+            ...state.meta,version:1,count:state.count,level:state.level,
+            badgeIds,awards:[],
+          } : null;
+          await setMetadata(live,CARD_KEY,nextMeta);
+          return group?.id||live.id;
+        });
+        selectedIds.push(newId);
+        updated++;
+        progress(i+1,states.length);
+      }
+      await restoreCardSelection(selectedIds);
+      return {updated,removed,total:states.length};
+    });
+  }
+
   async function absolutePosition(item) {
     const x=Number(item.x), y=Number(item.y);
     if(!Number.isFinite(x)||!Number.isFinite(y)) {
@@ -1056,9 +1158,9 @@ export function makeManager(board, options={}) {
   }
 
   return {
-    version:'1.9.1',selectionInfo,selectedCards,initializeSelected,repairSelected,
+    version:'1.9.2',selectionInfo,selectedCards,initializeSelected,repairSelected,
     resetSelected,arrangeSelectedGrid,layersSelected,checkAndRepairSelected,
-    setSelectedLevel,changeAward,rearrangeSelectedAwards,
+    setSelectedLevel,resetSelectedLevels,changeAward,resetSelectedAwards,rearrangeSelectedAwards,
     setStatusHandler:fn=>{statusHandler=typeof fn==='function'?fn:()=>{};},
   };
 }

@@ -27,11 +27,16 @@ input[type=range]{width:100%;accent-color:var(--yellow);cursor:pointer}
 .circle{border-radius:50%;background:var(--gray);color:#fff;display:grid;place-items:center;font-weight:700;font-size:11px;flex:0 0 auto}
 .circle.active{background:var(--yellow);color:var(--bg)}
 .circle.compact{border-radius:5px;font-size:10px}
-.level-buttons{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.level-buttons{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
 .level-buttons.many{grid-template-columns:repeat(5,minmax(0,1fr))}
 .level-button{background:#8a69e8;color:#fff;border:1px solid #a68bff;border-radius:8px;font-size:17px;font-weight:900;min-height:44px;cursor:pointer}
 .level-button:hover,.level-button:focus-visible{background:var(--yellow);color:var(--bg);outline-color:var(--yellow)}
 .level-button:disabled{opacity:.45;cursor:wait}
+.level-reset{background:transparent;border:1px solid var(--yellow);color:var(--yellow);font-size:24px}
+.award-tools{display:flex;gap:7px;margin-bottom:12px}
+.award-tools .button{flex:1;min-width:0;width:auto;padding:9px 5px;font-size:10px}
+.award-tools .award-reset{border-color:#bba0d9;color:#fff}
+.award-tools .award-reset:hover{border-color:var(--yellow);color:var(--yellow)}
 .hint{font-size:11px;line-height:1.55;color:var(--muted);margin:0 0 14px}
 .row{display:flex;gap:7px;align-items:center;margin:0 0 10px}
 .row>*{min-width:0}

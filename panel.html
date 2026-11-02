@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Caboledo Card Manager</title>
-  <link rel="stylesheet" href="./style.css?v=1.9.1">
+  <link rel="stylesheet" href="./style.css?v=1.9.2">
 </head>
 <body>
   <main class="app">
@@ -32,7 +32,7 @@
 
     <section class="section">
       <div class="section-title"><span class="number">02</span><h2>Level anwenden</h2></div>
-      <p class="hint">Vorbereitete Karten auswählen und direkt einen Level anklicken. Nur der Klick startet eine Miro-Aktion.</p>
+      <p class="hint">Vorbereitete Karten auswählen und direkt einen Level anklicken. ↺ setzt die Level auf 0 (alle Zahlen grau), ohne Awards zu entfernen.</p>
       <div id="level-buttons" class="level-buttons" aria-label="Level direkt zuweisen"></div>
       <p class="hint" style="margin:10px 0 0">Keine automatischen Prüfungen beim Bewegen oder Auswählen.</p>
     </section>
@@ -40,11 +40,14 @@
     <section class="section">
       <div class="section-title"><span class="number">03</span><h2>Awards vergeben</h2></div>
       <p class="hint">Eine oder mehrere vorbereitete Karten auswählen. Maximal 4 Awards pro Karte. Award hinzufügen oder entfernen.</p>
-      <button id="rearrange-awards" class="button outline" style="margin-bottom:12px">↧ Vorhandene Awards vertikal anordnen</button>
+      <div class="award-tools">
+        <button id="rearrange-awards" class="button outline">↧ Awards anordnen</button>
+        <button id="reset-awards" class="button outline award-reset" title="Alle Awards auf ausgewählten Karten entfernen, Level bleiben bestehen">↺ Awards entfernen</button>
+      </div>
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.9 · Manual Only</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.9.2 · Manual Only</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
@@ -58,6 +61,6 @@
       message.className='message visible error';
     },8000);
   </script>
-  <script type="module" src="./panel.js?v=1.9.1"></script>
+  <script type="module" src="./panel.js?v=1.9.2"></script>
 </body>
 </html>
