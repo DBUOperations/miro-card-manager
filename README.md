@@ -1,4 +1,8 @@
-# Caboledo Card Manager 1.9.0 — Manual Only
+# Caboledo Card Manager 1.9.1 — Manual Only
+
+## Ispravka 1.9.1: Cut/Paste
+
+Miro pri Cut/Paste može ukloniti stare ID-jeve brojeva i nagrada, dok ih kopirani metapodaci i dalje pominju. Ranija verzija nije prepoznavala Miro poruku `Can not retrieve item with id ...` kao nestali element i zato su `Repair` i `Reset` mogli da stanu. Nova verzija zanemaruje samo takve potvrđeno nedostajuće reference; ne briše tuđe elemente niti ignoriše druge SDK greške. Dva dodatna automatizovana testa proveravaju `Repair` i direktni `Full Reset` nakon Cut/Paste. **Nema automatskih poziva u pozadini.**
 
 Ovo je kompletan izvorni kod za postojeću Miro aplikaciju. **ZIP nije automatski instaliran** na GitHub niti u firmni Miro.
 
@@ -25,7 +29,7 @@ Ovo je kompletan izvorni kod za postojeću Miro aplikaciju. **ZIP nije automatsk
 
 1. Napravi rezervnu kopiju test Miro boarda i sačuvaj prethodnu verziju GitHub repozitorijuma.
 2. Otpakuj ZIP. Prenesi izmenjene fajlove i `assets/awards/` u **postojeći** GitHub Pages repo aplikacije (`DBUOperations/miro-card-manager`), čuvajući strukturu direktorijuma. Menjaju se *zajedno*: `index.html`, `headless.js`, `core.js`, `panel.js`, `panel.html`, `style.css`, `awards.js`, `assets/awards/`.
-3. Sačekaj da GitHub Pages objavi novu verziju. U Miro Developer Hubu koristi postojeći URL aplikacije; ako je potrebno osvežavanje keša, proveri `https://dbuoperations.github.io/miro-card-manager/index.html?v=1.9.0`.
+3. Sačekaj da GitHub Pages objavi novu verziju. U Miro Developer Hubu koristi postojeći URL aplikacije; ako je potrebno osvežavanje keša, proveri `https://dbuoperations.github.io/miro-card-manager/index.html?v=1.9.1`.
 4. Zatvori sve stare Miro tabove, ponovo otvori test board i osveži stranicu bez keša (Ctrl+Shift+R ili Cmd+Shift+R).
 5. Proveri scenarije navedene ispod. Tek onda koristi na pravom kursu.
 

@@ -25,7 +25,7 @@ function bootPanel(withNewCore) {
   const manager={
     selectionInfo:async()=>{sdkCalls.push('selectionInfo');return {cards:0,zones:0};},
     selectedCards:async()=>{sdkCalls.push('selectedCards');return [];},
-    ...(withNewCore?{version:'1.9.0',setSelectedLevel:async n=>{sdkCalls.push('setLevel:'+n);return {updated:1,total:1};},setStatusHandler:()=>{}}:{}),
+    ...(withNewCore?{version:'1.9.1',setSelectedLevel:async n=>{sdkCalls.push('setLevel:'+n);return {updated:1,total:1};},setStatusHandler:()=>{}}:{}),
   };
   const window={miro:{board},confirm:()=>true};
   const runtime=source.replace(/^import .*?;\s*$/gm,'');
@@ -70,11 +70,11 @@ test('HTML script and module imports use matching cache-busting versions',()=>{
   const panel=readFileSync(new URL('./panel.html',import.meta.url),'utf8');
   const index=readFileSync(new URL('./index.html',import.meta.url),'utf8');
   const headless=readFileSync(new URL('./headless.js',import.meta.url),'utf8');
-  assert.match(source,/core\.js\?v=1\.9\.0/);
-  assert.match(headless,/panel\.html\?v=1\.9\.0/);
-  assert.match(panel,/panel\.js\?v=1\.9\.0/);
-  assert.match(panel,/style\.css\?v=1\.9\.0/);
-  assert.match(index,/headless\.js\?v=1\.9\.0/);
+  assert.match(source,/core\.js\?v=1\.9\.1/);
+  assert.match(headless,/panel\.html\?v=1\.9\.1/);
+  assert.match(panel,/panel\.js\?v=1\.9\.1/);
+  assert.match(panel,/style\.css\?v=1\.9\.1/);
+  assert.match(index,/headless\.js\?v=1\.9\.1/);
   assert.doesNotMatch(panel,/zone-level|assign-zone|manual-level|sync-levels|Auto Level/);
   assert.doesNotMatch(source,/assignSelectedZone|syncSelectedLevels|getConfig/);
   assert.doesNotMatch(source,/selection:update|items:update|setInterval\(/);
@@ -92,5 +92,5 @@ test('headless registers only the user-click handler, no reactions to guest card
   assert.equal(listeners.has('items:update'),false);
   await listeners.get('icon:click')();
   assert.equal(sdkCalls.length,1);
-  assert.equal(sdkCalls[0].url,'panel.html?v=1.9.0');
+  assert.equal(sdkCalls[0].url,'panel.html?v=1.9.1');
 });

@@ -1,4 +1,4 @@
-import {makeManager} from './core.js?v=1.9.0';
+import {makeManager} from './core.js?v=1.9.1';
 import {AWARDS,awardAssetUrl} from './awards.js';
 
 const $=id=>document.getElementById(id);
@@ -13,7 +13,7 @@ let busy=false;
 let toastTimer;
 // The panel must still render if a browser temporarily has an older core.js
 // in its cache. Warn instead of stopping execution before the award gallery.
-const coreCompatible=manager.version==='1.9.0';
+const coreCompatible=manager.version==='1.9.1';
 manager.setStatusHandler?.(message=>{
   if(busy)$('busy-text').textContent=message;
 });

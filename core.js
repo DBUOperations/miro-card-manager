@@ -21,6 +21,10 @@ export function makeManager(board, options={}) {
   const CREDIT_MINUTE=options.creditMinute??85000;
   const CREDIT_HOUR=options.creditHour??850000;
   const isRateLimit=err=>/rate.?limit|too many requests|credits? (?:per|limit|exceeded)|429/i.test(String(err?.message||err));
+  // The Miro SDK reports an ID removed by Cut/Paste as
+  // "Can not retrieve item with id ...", not just "not found". Its
+  // old metadata reference must never make the entire operation fail.
+  const isMissingItem=err=>/not found|\b404\b|deleted|does not exist|can(?:not| not|'t) retrieve item (?:with|by) id|cannot get item with id/i.test(String(err?.message||err));
   async function sdkCall(operation,cost=50) {
     for(let attempt=0;attempt<4;attempt++) {
       while(true) {
@@ -182,7 +186,7 @@ export function makeManager(board, options={}) {
       if(!id)continue;
       try { found.push(await getById(id)); }
       catch (err) {
-        if(!/not found|404|deleted|does not exist/i.test(String(err?.message||err)))throw err;
+        if(!isMissingItem(err))throw err;
         // A missing element can be reconstructed by explicit Repair.
       }
     }
@@ -1052,7 +1056,7 @@ export function makeManager(board, options={}) {
   }
 
   return {
-    version:'1.9.0',selectionInfo,selectedCards,initializeSelected,repairSelected,
+    version:'1.9.1',selectionInfo,selectedCards,initializeSelected,repairSelected,
     resetSelected,arrangeSelectedGrid,layersSelected,checkAndRepairSelected,
     setSelectedLevel,changeAward,rearrangeSelectedAwards,
     setStatusHandler:fn=>{statusHandler=typeof fn==='function'?fn:()=>{};},

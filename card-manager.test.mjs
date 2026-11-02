@@ -221,6 +221,54 @@ test('copied card with awards can receive a new award independently of original'
   assert.ok(await board.getById(before.awards[0].itemId));
 });
 
+test('Cut/Paste: deleted original IDs produce Miro Can not retrieve error, but Repair recovers the pasted group',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const original=board.add('image',{width:170,height:295,x:0,y:0});
+  board.select([original]);await manager.initializeSelected(6);
+  board.select([await board.getById(original.groupId)]);
+  await manager.changeAward(AWARDS[0].id);
+  const originalGroup=await board.getById((await board.getById(original.id)).groupId);
+  const copied=await duplicateAvatar(board,original);
+  // In Miro, Cut/Paste can re-create every item with new IDs and remove the old.
+  for(const item of await originalGroup.getItems())await board.remove(item);
+  await board.remove(originalGroup);
+  const getById=board.getById.bind(board);
+  board.getById=async id=>{
+    try{return await getById(id);}catch{throw new Error(`Can not retrieve item with id ${id}`);}
+  };
+  board.select([copied.group]);
+  assert.equal((await manager.checkAndRepairSelected()).updated,1);
+  const meta=await copied.image.getMetadata('dbu_cm_card_v1');
+  assert.equal(meta.badgeIds.length,6);
+  assert.equal(meta.awards.length,1);
+  assert.equal((await board.get({type:'shape'})).length,6);
+  board.select([await board.getById((await board.getById(copied.image.id)).groupId)]);
+  assert.equal((await manager.resetSelected(6)).reset,1);
+  assert.equal((await board.get({type:'shape'})).length,0);
+  assert.equal((await board.get({type:'image'})).length,1);
+});
+
+test('Cut/Paste: Full Reset works directly despite broken metadata references to deleted IDs',async()=>{
+  const board=new MockBoard(),manager=makeManager(board);
+  const original=board.add('image',{width:170,height:295,x:0,y:0});
+  board.select([original]);await manager.initializeSelected(6);
+  const group=await board.getById(original.groupId);
+  const copied=await duplicateAvatar(board,original);
+  for(const item of await group.getItems())await board.remove(item);
+  await board.remove(group);
+  const getById=board.getById.bind(board);
+  board.getById=async id=>{
+    try{return await getById(id);}catch{throw new Error(`Can not retrieve item with id ${id}`);}
+  };
+  board.select([copied.group]);
+  assert.equal((await manager.resetSelected(6)).reset,1);
+  assert.equal((await board.get({type:'shape'})).length,0);
+  assert.equal(await copied.image.getMetadata('dbu_cm_card_v1'),null);
+  board.select([copied.image]);
+  assert.equal((await manager.initializeSelected(6)).updated,1);
+  assert.equal((await board.get({type:'shape'})).length,6);
+});
+
 test('Repair removes manager-tagged stray number left outside an otherwise healthy group',async()=>{
   const board=new MockBoard(),manager=makeManager(board);
   const image=board.add('image',{width:170,height:295,x:0,y:0});
@@ -704,7 +752,7 @@ test('Full Reset leaves only the original SVG avatars and clears all Manager met
   for(const id of oldAwards)await assert.rejects(()=>board.getById(id),/not found/);
   const untouched=await images[2].getMetadata('dbu_cm_card_v1');
   assert.equal(untouched.count,6);
-  assert.equal(manager.version,'1.9.0');
+  assert.equal(manager.version,'1.9.1');
 });
 
 test('Full Reset refuses a group with unrelated objects before mutating anything',async()=>{
