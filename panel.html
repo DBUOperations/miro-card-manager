@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Caboledo Card Manager</title>
-  <link rel="stylesheet" href="./style.css?v=1.8.0">
+  <link rel="stylesheet" href="./style.css?v=1.9.0">
 </head>
 <body>
   <main class="app">
@@ -14,7 +14,7 @@
       <p>Level &amp; Awards direkt auf Deinem Miro-Board.</p>
       <div class="selection" id="selection"><b id="selected-count">–</b> Karten ausgewählt <button id="check-selection" class="selection-check" title="Auswahl nur jetzt prüfen (Miro API)">↻ Prüfen</button></div>
       <div class="quick-tools" aria-label="Kartenwerkzeuge">
-        <button id="reset-cards" class="tool-button" title="Ausgewählte Karten: alle Awards entfernen, Level 0 und aktuelle Kreisanzahl">↺ Reset</button>
+        <button id="reset-cards" class="tool-button" title="Vollständig zurücksetzen: nur die originalen SVG-Avatare bleiben erhalten">↺ Reset</button>
         <button id="grid-cards" class="tool-button" title="Ausgewählte Karten als Raster mit vier Spalten anordnen">▦ Grid</button>
         <button id="check-repair" class="tool-button" title="Ausgewählte Karten prüfen und nur bei Bedarf reparieren">✚ Repair</button>
         <button id="fix-layers" class="tool-button" title="Ausgewählte Karten als ganze Einheit in den Vordergrund holen">⇧ Layers</button>
@@ -44,7 +44,7 @@
       <div class="award-list" id="award-list"></div>
     </section>
 
-    <footer class="footer">Caboledo · Miro Card Manager v1.8 · Manual Only</footer>
+    <footer class="footer">Caboledo · Miro Card Manager v1.9 · Manual Only</footer>
   </main>
   <div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Bitte warten …</span></div>
   <div id="message" class="message" aria-live="polite"></div>
@@ -58,6 +58,6 @@
       message.className='message visible error';
     },8000);
   </script>
-  <script type="module" src="./panel.js?v=1.8.0"></script>
+  <script type="module" src="./panel.js?v=1.9.0"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import {makeManager} from './core.js?v=1.8.0';
+import {makeManager} from './core.js?v=1.9.0';
 import {AWARDS,awardAssetUrl} from './awards.js';
 
 const $=id=>document.getElementById(id);
@@ -13,7 +13,7 @@ let busy=false;
 let toastTimer;
 // The panel must still render if a browser temporarily has an older core.js
 // in its cache. Warn instead of stopping execution before the award gallery.
-const coreCompatible=manager.version==='1.8.0';
+const coreCompatible=manager.version==='1.9.0';
 manager.setStatusHandler?.(message=>{
   if(busy)$('busy-text').textContent=message;
 });
@@ -23,7 +23,7 @@ function toast(text,error=false) {
   el.textContent=text;
   el.className='message visible'+(error?' error':'');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.className='message',6000);
+  toastTimer=setTimeout(()=>el.className='message',error?15000:6000);
 }
 
 function preview() {
@@ -138,11 +138,11 @@ $('initialize').addEventListener('click',()=>run('Karten vorbereiten',async(prog
 }));
 
 $('reset-cards').addEventListener('click',()=>run('Full Reset',async(progress)=>{
-  const cards=await manager.selectedCards({allowNew:false});
-  if(!cards.length)throw new Error('Bitte vorbereitete Karten auswählen.');
-  if(!window.confirm(`${cards.length} Karte(n) zurücksetzen? Alle Awards werden gelöscht, Level wird 0 und die Karte erhält ${levelCount} graue Kreise. Die Avatarbilder bleiben erhalten.`))return;
+  const cards=await manager.selectedCards({allowNew:true});
+  if(!cards.length)throw new Error('Bitte Avatar-Karten auswählen.');
+  if(!window.confirm(`${cards.length} Karte(n) vollständig zurücksetzen? Alle Manager-Level, Awards und Manager-Daten werden entfernt. Nur die originalen SVG-Avatare bleiben erhalten.`))return;
   const res=await manager.resetSelected(levelCount,progress,cards);
-  toast(`${res.reset} Karten zurückgesetzt · Level 0 · ${res.count} graue Kreise.`);
+  toast(`${res.reset} Karten vollständig zurückgesetzt · nur SVG-Avatare bleiben.`);
 }));
 
 $('grid-cards').addEventListener('click',()=>run('Grid anordnen',async(progress)=>{
