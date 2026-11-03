@@ -1,9 +1,10 @@
 {
   "name": "dbu-miro-card-manager",
   "private": true,
-  "version": "1.9.1",
+  "version": "1.9.3",
   "type": "module",
   "scripts": {
-    "test": "node --test card-manager.test.mjs panel-startup.test.mjs"
+    "test": "node --test card-manager.test.mjs panel-startup.test.mjs tests/*.test.mjs",
+    "benchmark": "node scripts/benchmark.mjs"
   }
 }

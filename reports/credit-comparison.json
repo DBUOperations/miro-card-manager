@@ -1,0 +1,1163 @@
+{
+  "version": "1.9.3",
+  "baselineVersion": "1.9.2",
+  "date": "2026-11-03",
+  "baselineCoreSha256": "0b3fef67654f817281471286aeea2e7d05d0af3b4fd603abef0fbabc1feec1d6",
+  "optimizedCoreSha256": "abe111ea38693d45c2f5f5a0c7cc458749d0b235fe673b66579dac310d64b35f",
+  "method": "Independent instrumented SDK mock, fresh manager and 20 cards per scenario; current groups selected. Six level badges, Level 3 unless specified. Setup excluded; synchronous command and selection restoration included. No wall-clock or real-Miro measurements.",
+  "weights": "getSelection/get/createImage/image.sync: 500; all other used SDK methods: 50. Attempted calls, including errors, counted conservatively.",
+  "sources": [
+    "https://developers.miro.com/docs/websdk-reference-rate-limiting",
+    "https://developers.miro.com/docs/websdk-reference-board"
+  ],
+  "results": [
+    {
+      "scenario": "Level 3 on twenty Level 3 cards",
+      "before": {
+        "calls": 263,
+        "credits": 13600,
+        "mutations": 2,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 41,
+        "credits": 2500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 81.6
+    },
+    {
+      "scenario": "Mixed levels: 15 × L3, 3 × L2, 2 × L1 → L3",
+      "before": {
+        "calls": 282,
+        "credits": 14550,
+        "mutations": 14,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 67,
+            "credits": 3350
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.setMetadata": {
+            "calls": 5,
+            "credits": 250
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "shape.sync": {
+            "calls": 7,
+            "credits": 350
+          }
+        }
+      },
+      "after": {
+        "calls": 53,
+        "credits": 3100,
+        "mutations": 12,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.setMetadata": {
+            "calls": 5,
+            "credits": 250
+          },
+          "shape.sync": {
+            "calls": 7,
+            "credits": 350
+          }
+        }
+      },
+      "reductionPercent": 78.7
+    },
+    {
+      "scenario": "All twenty Level 1 cards → Level 3",
+      "before": {
+        "calls": 363,
+        "credits": 18600,
+        "mutations": 62,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 100,
+            "credits": 5000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "shape.sync": {
+            "calls": 40,
+            "credits": 2000
+          }
+        }
+      },
+      "after": {
+        "calls": 101,
+        "credits": 5500,
+        "mutations": 60,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.sync": {
+            "calls": 40,
+            "credits": 2000
+          }
+        }
+      },
+      "reductionPercent": 70.4
+    },
+    {
+      "scenario": "Add existing award (four awards per card)",
+      "before": {
+        "calls": 361,
+        "credits": 18500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getById": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 140,
+            "credits": 7000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 41,
+        "credits": 2500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 86.5
+    },
+    {
+      "scenario": "Remove absent award (four awards per card)",
+      "before": {
+        "calls": 361,
+        "credits": 18500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getById": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 140,
+            "credits": 7000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 41,
+        "credits": 2500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 86.5
+    },
+    {
+      "scenario": "Arrange four already aligned awards per card",
+      "before": {
+        "calls": 723,
+        "credits": 72600,
+        "mutations": 162,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringInFrontOf": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 160,
+            "credits": 8000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 220,
+            "credits": 11000
+          },
+          "image.sync": {
+            "calls": 80,
+            "credits": 40000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 41,
+        "credits": 2500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 96.6
+    },
+    {
+      "scenario": "Prepare twenty already healthy six-level cards",
+      "before": {
+        "calls": 245,
+        "credits": 13600,
+        "mutations": 2,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 41,
+        "credits": 2500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 81.6
+    },
+    {
+      "scenario": "Repair twenty healthy cards (two awards each)",
+      "before": {
+        "calls": 645,
+        "credits": 33600,
+        "mutations": 2,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 220,
+            "credits": 11000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "image.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "shape.getMetadata": {
+            "calls": 240,
+            "credits": 12000
+          }
+        }
+      },
+      "after": {
+        "calls": 203,
+        "credits": 11500,
+        "mutations": 0,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "reductionPercent": 65.8
+    },
+    {
+      "scenario": "Add a second award to twenty cards",
+      "before": {
+        "calls": 543,
+        "credits": 36600,
+        "mutations": 142,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringInFrontOf": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.createImage": {
+            "calls": 20,
+            "credits": 10000
+          },
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 100,
+            "credits": 5000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "image.setMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 281,
+        "credits": 23500,
+        "mutations": 142,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringInFrontOf": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.createImage": {
+            "calls": 20,
+            "credits": 10000
+          },
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 59,
+            "credits": 2950
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 39,
+            "credits": 1950
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.setMetadata": {
+            "calls": 40,
+            "credits": 2000
+          }
+        }
+      },
+      "reductionPercent": 35.8
+    },
+    {
+      "scenario": "Remove one of two awards on twenty cards",
+      "before": {
+        "calls": 583,
+        "credits": 29600,
+        "mutations": 122,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringInFrontOf": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.remove": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 160,
+            "credits": 8000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 301,
+        "credits": 15500,
+        "mutations": 122,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringInFrontOf": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 79,
+            "credits": 3950
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.remove": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 39,
+            "credits": 1950
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 47.6
+    },
+    {
+      "scenario": "Reset Levels on twenty Level 3 cards (two awards each)",
+      "before": {
+        "calls": 503,
+        "credits": 25600,
+        "mutations": 82,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.getById": {
+            "calls": 180,
+            "credits": 9000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "image.getMetadata": {
+            "calls": 80,
+            "credits": 4000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "shape.sync": {
+            "calls": 60,
+            "credits": 3000
+          }
+        }
+      },
+      "after": {
+        "calls": 121,
+        "credits": 6500,
+        "mutations": 80,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.sync": {
+            "calls": 60,
+            "credits": 3000
+          }
+        }
+      },
+      "reductionPercent": 74.6
+    },
+    {
+      "scenario": "Reset Awards on twenty cards (two awards each)",
+      "before": {
+        "calls": 545,
+        "credits": 28600,
+        "mutations": 102,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 120,
+            "credits": 6000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.remove": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 140,
+            "credits": 7000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 283,
+        "credits": 15500,
+        "mutations": 102,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 79,
+            "credits": 3950
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.group": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.remove": {
+            "calls": 40,
+            "credits": 2000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 39,
+            "credits": 1950
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 45.8
+    },
+    {
+      "scenario": "Full Reset on twenty cards (two awards each)",
+      "before": {
+        "calls": 765,
+        "credits": 39600,
+        "mutations": 202,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 240,
+            "credits": 12000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.remove": {
+            "calls": 160,
+            "credits": 8000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 140,
+            "credits": 7000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 503,
+        "credits": 26500,
+        "mutations": 202,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.deselect": {
+            "calls": 1,
+            "credits": 50
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 199,
+            "credits": 9950
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "board.remove": {
+            "calls": 160,
+            "credits": 8000
+          },
+          "board.select": {
+            "calls": 1,
+            "credits": 50
+          },
+          "group.getItems": {
+            "calls": 39,
+            "credits": 1950
+          },
+          "group.ungroup": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "image.setMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 33.1
+    },
+    {
+      "scenario": "Layers on twenty cards (two awards each)",
+      "before": {
+        "calls": 443,
+        "credits": 23500,
+        "mutations": 60,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringToFront": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getById": {
+            "calls": 80,
+            "credits": 4000
+          },
+          "board.getLayerIndex": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "image.getMetadata": {
+            "calls": 100,
+            "credits": 5000
+          },
+          "shape.getMetadata": {
+            "calls": 120,
+            "credits": 6000
+          }
+        }
+      },
+      "after": {
+        "calls": 123,
+        "credits": 7500,
+        "mutations": 60,
+        "failedCalls": 0,
+        "failedCredits": 0,
+        "byMethod": {
+          "board.bringToFront": {
+            "calls": 60,
+            "credits": 3000
+          },
+          "board.get": {
+            "calls": 2,
+            "credits": 1000
+          },
+          "board.getLayerIndex": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "board.getSelection": {
+            "calls": 1,
+            "credits": 500
+          },
+          "group.getItems": {
+            "calls": 20,
+            "credits": 1000
+          },
+          "image.getMetadata": {
+            "calls": 20,
+            "credits": 1000
+          }
+        }
+      },
+      "reductionPercent": 68.1
+    }
+  ]
+}

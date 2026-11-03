@@ -3,107 +3,10 @@ import assert from 'node:assert/strict';
 import {makeManager as createManager} from './core.js';
 import {AWARDS} from './awards.js';
 
-// Regular integration tests exercise card behavior, not real-time quotas.
-const makeManager=board=>createManager(board,{creditMinute:1e9,creditHour:1e9});
+// Integration tests exercise the original card behaviors with the SDK mock.
+const makeManager=board=>createManager(board);
 
-class Item {
-  constructor(board,type,props={}){Object.assign(this,props);this.board=board;this.type=type;this.id=String(++board.sequence);this.meta=new Map();}
-  async getMetadata(key){return this.meta.get(key);}
-  async setMetadata(key,value){this.meta.set(key,value);}
-  async sync(){
-    if(this.failNextSync){this.failNextSync=false;throw new Error('Simulated SDK sync failure');}
-    if(this.type==='image' && this.parentId && this.parentId!=='null'){
-      if(this.board.rejectFrameImageMovement) {
-        throw new Error('Cannot move the image item: child of another board item');
-      }
-      const parent=await this.board.getById(this.parentId);
-      if(this.relativeTo!=='parent_top_left' ||
-        this.x-this.width/2<0 || this.x+this.width/2>parent.width ||
-        this.y-this.height/2<0 || this.y+this.height/2>parent.height) {
-        throw new Error('Cannot move the image item: child of another board item');
-      }
-    }
-    this.board.synced++;
-  }
-}
-class FrameItem extends Item {
-  async remove(child){
-    assert.equal(child.parentId,this.id,'frame.remove called for a different parent');
-    child.x+=this.x-this.width/2;
-    child.y+=this.y-this.height/2;
-    child.parentId=null;
-    child.relativeTo='canvas_center';
-    this.board.frameDetachCount++;
-  }
-}
-class Group {
-  constructor(board,items){this.board=board;this.type='group';this.id=String(++board.sequence);this.ids=items.map(x=>x.id);this.releaseShiftX=0;this.releaseShiftY=0;for(const x of items)x.groupId=this.id;}
-  async getItems(){return this.ids.map(id=>this.board.items.get(id)).filter(Boolean);}
-  move(dx,dy){for(const id of this.ids){const item=this.board.items.get(id);item.x+=dx;item.y+=dy;}}
-  async ungroup(){
-    // Mimic Miro's changing coordinate reference on ungroup. In this mock,
-    // releaseShift can make post-ungroup SDK coordinates differ from the
-    // reliable pre-ungroup coordinates used by Auto Level.
-    const xs=[];
-    for(const old of await this.getItems()) {
-      const item=Object.assign(Object.create(Object.getPrototypeOf(old)),old,{
-        x:old.x+this.releaseShiftX,y:old.y+this.releaseShiftY,groupId:undefined,
-      });
-      this.board.items.set(item.id,item);
-      xs.push(item);
-    }
-    this.board.items.delete(this.id);
-    return xs;
-  }
-}
-class MockBoard {
-  constructor(){this.sequence=100;this.items=new Map();this.selected=[];this.synced=0;this.frameDetachCount=0;this.rejectFrameImageMovement=true;this.layers=[];this.data=new Map();this.storage={collection:()=>({get:async k=>this.data.get(k),set:async(k,v)=>this.data.set(k,v)})};}
-  add(type,props){const x=type==='frame'?new FrameItem(this,type,props):new Item(this,type,props);this.items.set(x.id,x);this.layers.push(x.id);return x;}
-  async createShape(props){return this.add('shape',props);}
-  async createImage(props){return this.add('image',{...props,height:props.width});}
-  async getSelection(){return this.selected.map(id=>this.items.get(id)).filter(Boolean);}
-  async get({type}){return [...this.items.values()].filter(x=>x.type===type);}
-  async getById(id){const x=this.items.get(id);if(!x)throw Error('not found '+id);return x;}
-  async group({items}){const g=new Group(this,items);this.items.set(g.id,g);return g;}
-  async remove(item){this.items.delete(item.id);this.layers=this.layers.filter(id=>id!==item.id);}
-  async bringToFront(items){
-    for(const item of Array.isArray(items)?items:[items]){
-      this.layers=this.layers.filter(id=>id!==item.id);
-      this.layers.push(item.id);
-    }
-  }
-  async bringInFrontOf(items,target){
-    const ids=(Array.isArray(items)?items:[items]).map(x=>x.id);
-    this.layers=this.layers.filter(id=>!ids.includes(id));
-    const at=this.layers.indexOf(target.id);
-    this.layers.splice(at+1,0,...ids);
-  }
-  async getLayerIndex(item){return this.layers.indexOf(item.id);}
-  select(items){this.selected=Array.isArray(items)?items.map(x=>x.id):[items.id].flat();}
-  async deselect(){this.selected=[];}
-}
-
-// Miro duplicates the metadata together with each item. The copied avatar,
-// badges and awards get NEW Miro IDs but copied metadata keeps OLD IDs.
-async function duplicateAvatar(board,source,offset=280) {
-  const live=await board.getById(source.id);
-  const old=await board.getById(live.groupId);
-  const members=await old.getItems();
-  const cloned=[];
-  for(const item of members) {
-    const copy=board.add(item.type,{
-      title:item.title,url:item.url,content:item.content,shape:item.shape,
-      width:item.width,height:item.height,x:item.x+offset,y:item.y,
-      style:item.style?structuredClone(item.style):undefined,
-    });
-    copy.meta=new Map([...item.meta].map(([k,v])=>[k,structuredClone(v)]));
-    cloned.push(copy);
-  }
-  const group=await board.group({items:cloned});
-  const image=cloned.find(item=>item.id!==source.id && item.type==='image' &&
-    Math.abs(item.width/item.height-170/295)<.12);
-  return {image,group,cloned};
-}
+import {MockBoard,duplicateAvatar} from './tests/mock-sdk.mjs';
 
 test('duplicated card Level command affects the copy only, never the original',async()=>{
   const board=new MockBoard(),manager=makeManager(board);
@@ -491,6 +394,7 @@ test('awards stack vertically, and existing awards can be realigned after moving
 
   const group=await board.getById(liveImage.groupId);
   group.move(750,220);
+  icons[0].x-=60; // An actual misalignment, not an already-correct moved group.
   group.releaseShiftX=-750;
   group.releaseShiftY=-220;
   board.select([group]);
@@ -594,6 +498,7 @@ test('explicit award realign first detaches a frame child before any sync',async
   icon.y-=frame.y-frame.height/2;
   icon.parentId=frame.id;
   icon.relativeTo='parent_top_left';
+  icon.y+=25; // Realignment should detach only an icon that actually needs moving.
   board.select([await board.getById((await board.getById(image.id)).groupId)]);
   await manager.rearrangeSelectedAwards();
   assert.equal(board.frameDetachCount,1);
@@ -660,6 +565,7 @@ test('an unexpected SDK award movement error restores the original card group',a
   await manager.changeAward(AWARDS[0].id);
   const meta=await image.getMetadata('dbu_cm_card_v1');
   const icon=await board.getById(meta.awards[0].itemId);
+  icon.x+=40;
   icon.failNextSync=true;
   board.select([await board.getById((await board.getById(image.id)).groupId)]);
   await assert.rejects(()=>manager.rearrangeSelectedAwards(),/Simulated SDK sync failure/);
@@ -752,7 +658,7 @@ test('Full Reset leaves only the original SVG avatars and clears all Manager met
   for(const id of oldAwards)await assert.rejects(()=>board.getById(id),/not found/);
   const untouched=await images[2].getMetadata('dbu_cm_card_v1');
   assert.equal(untouched.count,6);
-  assert.equal(manager.version,'1.9.1');
+  assert.equal(manager.version,'1.9.3');
 });
 
 test('Full Reset refuses a group with unrelated objects before mutating anything',async()=>{
@@ -768,45 +674,6 @@ test('Full Reset refuses a group with unrelated objects before mutating anything
   assert.equal((await image.getMetadata('dbu_cm_card_v1')).count,6);
   assert.equal((await board.get({type:'group'})).length,1);
   assert.ok(await board.getById(foreign.id));
-});
-
-test('Grid arranges 20 avatar groups into 4 columns and 5 rows preserving levels and awards',async()=>{
-  const board=new MockBoard(),manager=makeManager(board);
-  const images=Array.from({length:20},(_,i)=>board.add('image',{width:170,height:295,x:(i%4)*220+((i*7)%23),y:Math.floor(i/4)*390+((i*11)%30)}));
-  board.select(images);await manager.initializeSelected(6);
-  board.select(images.map(img=>board.items.get(img.groupId)));
-  await manager.setSelectedLevel(3);
-  await manager.changeAward(AWARDS[0].id);
-  const res=await manager.arrangeSelectedGrid(4);
-  assert.deepEqual(res,{moved:19,total:20,columns:4});
-  const live=await Promise.all(images.map(img=>board.getById(img.id)));
-  const left=Math.min(...live.map(img=>img.x)),top=Math.min(...live.map(img=>img.y));
-  const cells=new Set();
-  for(const image of live){
-    const col=Math.round((image.x-left)/(170*1.18));
-    const row=Math.round((image.y-top)/(295*1.12));
-    assert.ok(col>=0&&col<4&&row>=0&&row<5);
-    cells.add(`${row}-${col}`);
-    const meta=await image.getMetadata('dbu_cm_card_v1');
-    assert.equal(meta.level,3);
-    assert.equal(meta.awards.length,1);
-    assert.equal((await board.getById(meta.awards[0].itemId)).groupId,image.groupId);
-    for(const id of meta.badgeIds)assert.equal((await board.getById(id)).groupId,image.groupId);
-  }
-  assert.equal(cells.size,20);
-  assert.equal((await board.get({type:'group'})).length,20);
-});
-
-test('Grid rejects Frame-owned cards without ungrouping anything',async()=>{
-  const board=new MockBoard(),manager=makeManager(board);
-  const frame=board.add('frame',{x:400,y:400,width:800,height:800});
-  const images=[board.add('image',{width:170,height:295,x:300,y:300}),board.add('image',{width:170,height:295,x:600,y:300})];
-  board.select(images);await manager.initializeSelected(6);
-  const first=await board.getById(images[0].id);
-  first.parentId=frame.id;first.relativeTo='parent_top_left';first.x=300;first.y=300;
-  board.select(images.map(img=>board.items.get(img.groupId)));
-  await assert.rejects(()=>manager.arrangeSelectedGrid(4),/Frame/);
-  assert.equal((await board.get({type:'group'})).length,2);
 });
 
 test('Layers brings the selected avatar, circles and awards above the other card as one stack',async()=>{
@@ -906,23 +773,3 @@ test('automatic visual layers keep overlapping cards and badges in contiguous st
   assert.ok(Math.min(...bi)>board.layers.indexOf(backdrop.id));
 });
 
-test('single failed SDK call is retried inside the same card without losing the group',async()=>{
-  const board=new MockBoard();
-  const waits=[];
-  const manager=createManager(board,{
-    sleep:async ms=>waits.push(ms),creditMinute:1e9,creditHour:1e9,
-  });
-  const originalCreate=board.createShape.bind(board);
-  let failures=0;
-  board.createShape=async props=>{
-    if(failures++===0)throw new Error('Miro Web SDK rate limit exceeded: 429');
-    return originalCreate(props);
-  };
-  const image=board.add('image',{width:170,height:295,x:0,y:0});
-  board.select([image]);
-  assert.equal((await manager.initializeSelected(3)).updated,1);
-  assert.deepEqual(waits,[65000]);
-  const meta=await image.getMetadata('dbu_cm_card_v1');
-  assert.equal(meta.badgeIds.length,3);
-  assert.ok(image.groupId);
-});

@@ -1,5 +1,5 @@
-import {makeManager} from './core.js?v=1.9.2';
-import {AWARDS,awardAssetUrl} from './awards.js';
+import {makeManager} from './core.js?v=1.9.3';
+import {AWARDS,awardAssetUrl} from './awards.js?v=1.9.3';
 
 const $=id=>document.getElementById(id);
 const board=window.miro?.board;
@@ -11,9 +11,13 @@ const manager=makeManager(board);
 let levelCount=6;
 let busy=false;
 let toastTimer;
+manager.setUsageHandler?.(usage=>{
+  $('usage-last').textContent=usage.lastAction.toLocaleString('de-DE');
+  $('usage-total').textContent=usage.sessionTotal.toLocaleString('de-DE');
+});
 // The panel must still render if a browser temporarily has an older core.js
 // in its cache. Warn instead of stopping execution before the award gallery.
-const coreCompatible=manager.version==='1.9.2';
+const coreCompatible=manager.version==='1.9.3';
 manager.setStatusHandler?.(message=>{
   if(busy)$('busy-text').textContent=message;
 });
@@ -77,6 +81,7 @@ async function run(label,fn) {
   $('busy').hidden=false;
   $('busy-text').textContent=label;
   for(const button of document.querySelectorAll('button')) button.disabled=true;
+  manager.beginAction?.();
   try {
     const result=await fn((done,total)=>{
       $('busy-text').textContent=`${label} ${done}/${total}`;
@@ -87,6 +92,7 @@ async function run(label,fn) {
     console.error('DBU Card Manager',e);
     toast(e?.message||'Ein Fehler ist aufgetreten. Bitte erneut versuchen.',true);
   } finally {
+    manager.endAction?.();
     busy=false;
     $('level-count').disabled=false;
     $('busy').hidden=true;
@@ -156,11 +162,6 @@ $('reset-cards').addEventListener('click',()=>run('Full Reset',async(progress)=>
   toast(`${res.reset} Karten vollständig zurückgesetzt · nur SVG-Avatare bleiben.`);
 }));
 
-$('grid-cards').addEventListener('click',()=>run('Grid anordnen',async(progress)=>{
-  const res=await manager.arrangeSelectedGrid(4,progress);
-  toast(`${res.total} Karten in einem Raster mit ${res.columns} Spalten angeordnet.`);
-}));
-
 $('check-repair').addEventListener('click',()=>run('Karten prüfen & reparieren',async(progress)=>{
   const res=await manager.checkAndRepairSelected(progress);
   toast(`${res.total} geprüft · ${res.updated} repariert · ${res.healthy} bereits in Ordnung · ${res.awardsRepaired} Awards korrigiert.`);
@@ -180,7 +181,7 @@ $('reset-awards').addEventListener('click',()=>run('Awards entfernen',async(prog
   const cards=await manager.selectedCards({allowNew:true});
   if(!cards.length)throw new Error('Bitte Avatar-Karten auswählen.');
   if(!window.confirm(`Alle Awards von ${cards.length} ausgewählten Karte(n) entfernen? Die Level-Zahlen bleiben erhalten.`))return;
-  const res=await manager.resetSelectedAwards(progress);
+  const res=await manager.resetSelectedAwards(progress,cards);
   toast(`${res.removed} Awards von ${res.updated} Karten entfernt · Level bleiben erhalten.`);
 }));
 
